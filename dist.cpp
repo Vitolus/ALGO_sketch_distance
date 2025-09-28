@@ -19,8 +19,7 @@ std::string extractBaseName(const std::string& path) {
     std::string filename = (last_slash_pos == std::string::npos) ? path : path.substr(last_slash_pos + 1);
 
     // Find the .sketch extension to remove it
-    size_t extension_pos = filename.rfind(".sketch");
-    if (extension_pos != std::string::npos) {
+    if (size_t extension_pos = filename.rfind(".sketch"); extension_pos != std::string::npos) {
         return filename.substr(0, extension_pos);
     }
     return filename;
@@ -64,7 +63,7 @@ double computeDistanceBetweenSketches(const std::string& sketch_file1, const std
     }
     // TODO: REPLACE THIS WITH YOUR REAL DISTANCE LOGIC!
     // This dummy logic creates a predictable, non-zero value for demonstration.
-    return (double)(sketch_file1.length() % 10 + sketch_file2.length() % 10) / 10.0 + 0.1;
+    return static_cast<double>(sketch_file1.length() % 10 + sketch_file2.length() % 10) / 10.0 + 0.1;
 }
 
 void computeDistance(const std::vector<std::string>& sketch_files) {
@@ -75,7 +74,7 @@ void computeDistance(const std::vector<std::string>& sketch_files) {
     // while keeping track of the full path needed for calculations.
     std::vector<std::pair<std::string, std::string>> sorted_sketches;
     for (const auto& path : sketch_files) {
-        sorted_sketches.push_back({extractBaseName(path), path});
+        sorted_sketches.emplace_back(extractBaseName(path), path);
     }
 
     // Sort the vector of pairs. By default, it sorts based on the first
@@ -116,14 +115,13 @@ void computeDistance(const std::vector<std::string>& sketch_files) {
 int main(int argc, char* argv[]) {
     // This is a good practice for performance with large I/O
     std::ios_base::sync_with_stdio(false);
-    std::cin.tie(NULL);
+    std::cin.tie(nullptr);
 
     if (argc < 2) {
         printUsage(argv[0]);
         return 1;
     }
-    std::string command = argv[1];
-    if (command == "--create-sketch") {
+    if (std::string command = argv[1]; command == "--create-sketch") {
         if (argc != 3) {
             std::cerr << "Error: --create-sketch requires exactly one output file name.\n";
             printUsage(argv[0]);
@@ -138,7 +136,7 @@ int main(int argc, char* argv[]) {
         }
         std::vector<std::string> files;
         for (int i = 2; i < argc; ++i) {
-            files.push_back(argv[i]);
+            files.emplace_back(argv[i]);
         }
         computeDistance(files);
     } else {
