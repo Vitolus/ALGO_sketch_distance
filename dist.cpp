@@ -5,8 +5,11 @@
 #include <utility>   // For std::pair
 #include <iomanip>   // For std::fixed and std::setprecision
 
-void createSketch(const std::string& outputFile);
-void computeDistance(const std::vector<std::string>& sketch_files);
+void printUsage(const std::string& program_name) {
+    std::cerr << "Usage: \n"
+              << "  " << program_name << " --create-sketch <output.sketch>\n"
+              << "  " << program_name << " --distance <G1.sketch> <G2.sketch> ...\n";
+}
 
 // --- Helper function to get a clean sequence name from a file path ---
 // E.g., "data/human.sketch" -> "human"
@@ -23,6 +26,34 @@ std::string extractBaseName(const std::string& path) {
     return filename;
 }
 
+void createSketch(const std::string& output_file) {
+    // Print progress messages to standard error (stderr)
+    std::cerr << "Starting sketch creation from standard input...\n";
+    std::cerr << "   Output will be saved to: " << output_file << "\n";
+
+    // TODO: YOUR SKETCHING LOGIC GOES HERE
+    // 1. Initialize your sketching data structures.
+    //    Example: MinHash sketcher(k, sketch_size);
+
+    char current_base;
+    unsigned long long base_count = 0;
+
+    // 2. Loop, reading one character at a time from standard input (stdin).
+    //    std::cin.get() is efficient and reads until the input stream is closed.
+    while (std::cin.get(current_base)) {
+        // The upstream commands already filter for ACTG, so we can
+        // directly process the base.
+        // Example: sketcher.add(current_base);
+        base_count++;
+    }
+
+    // 3. Once the stream ends, finalize and save the sketch.
+    //    Example: sketcher.save_to_file(output_file);
+
+    std::cerr << "   Processed " << base_count << " bases.\n";
+    std::cerr << "   Sketch saved successfully to " << output_file << ".\n";
+}
+
 // --- Placeholder for your actual distance calculation logic ---
 // This is where you would load two sketch files and compute their distance.
 // For this example, it just returns a dummy value.
@@ -34,42 +65,6 @@ double computeDistanceBetweenSketches(const std::string& sketch_file1, const std
     // TODO: REPLACE THIS WITH YOUR REAL DISTANCE LOGIC!
     // This dummy logic creates a predictable, non-zero value for demonstration.
     return (double)(sketch_file1.length() % 10 + sketch_file2.length() % 10) / 10.0 + 0.1;
-}
-
-int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " --create-sketch <output.sketch> or "
-                  << argv[0] << " --distance <G1.sketch> <G2.sketch> ..." << std::endl;
-        return 1;
-    }
-    std::string command = argv[1];
-    if (command == "--create-sketch") {
-        if (argc != 3) {
-            std::cerr << "Usage: " << argv[0] << " --create-sketch <output.sketch>" << std::endl;
-            return 1;
-        }
-        std::string outputFile = argv[2];
-        createSketch(outputFile);
-    }else if (command == "--distance") {
-        if (argc < 4) {
-            std::cerr << "Usage: " << argv[0] << " --distance <G1.sketch> <G2.sketch> <G3.sketch> ..." << std::endl;
-            return 1;
-        }
-        std::vector<std::string> sketchFiles;
-        for (int i = 2; i < argc; ++i) {
-            sketchFiles.push_back(argv[i]);
-        }
-        computeDistance(sketchFiles);
-    }else {
-        std::cerr << "Unknown command: " << command << std::endl;
-        return 1;
-    }
-    return 0;
-}
-
-void createSketch(const std::string& outputFile) {
-    // sketch creation logic here
-    std::cout << "Creating sketch and saving to: " << outputFile << std::endl;
 }
 
 void computeDistance(const std::vector<std::string>& sketch_files) {
@@ -116,4 +111,40 @@ void computeDistance(const std::vector<std::string>& sketch_files) {
         }
         std::cout << "\n";
     }
+}
+
+int main(int argc, char* argv[]) {
+    // This is a good practice for performance with large I/O
+    std::ios_base::sync_with_stdio(false);
+    std::cin.tie(NULL);
+
+    if (argc < 2) {
+        printUsage(argv[0]);
+        return 1;
+    }
+    std::string command = argv[1];
+    if (command == "--create-sketch") {
+        if (argc != 3) {
+            std::cerr << "Error: --create-sketch requires exactly one output file name.\n";
+            printUsage(argv[0]);
+            return 1;
+        }
+        createSketch(argv[2]);
+    } else if (command == "--distance") {
+        if (argc < 4) {
+            std::cerr << "Error: --distance requires at least two sketch files.\n";
+            printUsage(argv[0]);
+            return 1;
+        }
+        std::vector<std::string> files;
+        for (int i = 2; i < argc; ++i) {
+            files.push_back(argv[i]);
+        }
+        computeDistance(files);
+    } else {
+        std::cerr << "Error: Unknown command '" << command << "'.\n";
+        printUsage(argv[0]);
+        return 1;
+    }
+    return 0;
 }
