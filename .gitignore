@@ -1,4 +1,6 @@
 **/*Zone.Identifier
+.vscode/
+build/
 
 ### C++ template
 # Prerequisites
