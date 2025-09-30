@@ -11,7 +11,9 @@ void printUsage(const std::string& program_name){
               << "  " << program_name << " --distance <G1.sketch> <G2.sketch> ...\n";
 }
 
-// helper function to get a clean sequence name from a file path
+/**
+ * @brief helper function to get a sequence name from a file path
+ */
 std::string extractBaseName(const std::string& path){
     // Find the last slash to remove the directory part
     size_t last_slash_pos = path.find_last_of("/\\");
@@ -22,6 +24,13 @@ std::string extractBaseName(const std::string& path){
     }
     return filename;
 }
+
+class Sketch{
+    public:
+    
+    private:
+
+};
 
 void createSketch(const std::string& output_file){
     // print progress messages to stderr
