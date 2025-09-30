@@ -11,14 +11,12 @@ void printUsage(const std::string& program_name) {
               << "  " << program_name << " --distance <G1.sketch> <G2.sketch> ...\n";
 }
 
-// --- Helper function to get a clean sequence name from a file path ---
-// E.g., "data/human.sketch" -> "human"
+// helper function to get a clean sequence name from a file path
 std::string extractBaseName(const std::string& path) {
     // Find the last slash to remove the directory part
     size_t last_slash_pos = path.find_last_of("/\\");
     std::string filename = (last_slash_pos == std::string::npos) ? path : path.substr(last_slash_pos + 1);
-
-    // Find the .sketch extension to remove it
+    // remove file extension if present
     if (size_t extension_pos = filename.rfind(".sketch"); extension_pos != std::string::npos) {
         return filename.substr(0, extension_pos);
     }
@@ -26,85 +24,66 @@ std::string extractBaseName(const std::string& path) {
 }
 
 void createSketch(const std::string& output_file) {
-    // Print progress messages to standard error (stderr)
+    // print progress messages to stderr
     std::cerr << "Starting sketch creation from standard input...\n";
     std::cerr << "   Output will be saved to: " << output_file << "\n";
-
-    // TODO: YOUR SKETCHING LOGIC GOES HERE
-    // 1. Initialize your sketching data structures.
-    //    Example: MinHash sketcher(k, sketch_size);
-
+    // TODO: initialize sketching data structure
     char current_base;
     unsigned long long base_count = 0;
-
-    // 2. Loop, reading one character at a time from standard input (stdin).
-    //    std::cin.get() is efficient and reads until the input stream is closed.
+    // reading one character at a time from stdin
     while (std::cin.get(current_base)) {
-        // The upstream commands already filter for ACTG, so we can
-        // directly process the base.
-        // Example: sketcher.add(current_base);
+        // upstream commands already filter for ACTG
+        // TODO: add current_base to the sketch
         base_count++;
     }
-
-    // 3. Once the stream ends, finalize and save the sketch.
-    //    Example: sketcher.save_to_file(output_file);
-
+    // finalize and save the sketch
     std::cerr << "   Processed " << base_count << " bases.\n";
     std::cerr << "   Sketch saved successfully to " << output_file << ".\n";
 }
 
-// --- Placeholder for your actual distance calculation logic ---
-// This is where you would load two sketch files and compute their distance.
-// For this example, it just returns a dummy value.
+/**
+ * @brief load two sketch files and compute their distance.
+ */
 double computeDistanceBetweenSketches(const std::string& sketch_file1, const std::string& sketch_file2) {
+    double dist = 0.0;
     // The distance from a sequence to itself is always 0.
     if (sketch_file1 == sketch_file2) {
-        return 0.0;
+        return dist;
     }
-    // TODO: REPLACE THIS WITH YOUR REAL DISTANCE LOGIC!
-    // This dummy logic creates a predictable, non-zero value for demonstration.
-    return static_cast<double>(sketch_file1.length() % 10 + sketch_file2.length() % 10) / 10.0 + 0.1;
+    // TODO: add distance computation logic
+    return dist;
 }
 
+/**
+ * @brief Compute and print the n x n distance matrix in Phylip format.
+ */
 void computeDistance(const std::vector<std::string>& sketch_files) {
     const size_t n = sketch_files.size();
-
-    // 1. EXTRACT and SORT sequence names
-    // We store pairs of <base_name, original_path> to sort by name
-    // while keeping track of the full path needed for calculations.
+    // store pairs of <base_name, original_path>
     std::vector<std::pair<std::string, std::string>> sorted_sketches;
     for (const auto& path : sketch_files) {
         sorted_sketches.emplace_back(extractBaseName(path), path);
     }
-
-    // Sort the vector of pairs. By default, it sorts based on the first
-    // element of the pair (the base name), which is exactly what we need.
+    // Sort the vector of pairs
     std::sort(sorted_sketches.begin(), sorted_sketches.end());
-
-    // 2. CALCULATE and STORE the n x n distance matrix
+    // compute and store the n x n distance matrix
     std::vector<std::vector<double>> distance_matrix(n, std::vector<double>(n));
-
     for (size_t i = 0; i < n; ++i) {
         for (size_t j = 0; j < n; ++j) {
-            // Use the original full paths for the calculation
+            // use the original paths for the calculation
             const std::string& file1 = sorted_sketches[i].second;
             const std::string& file2 = sorted_sketches[j].second;
             distance_matrix[i][j] = computeDistanceBetweenSketches(file1, file2);
         }
     }
-
-    // 3. STREAM the results to standard output in Phylip format
-    std::cout << std::fixed << std::setprecision(6); // Set floating point precision
-
-    // First line is the number of sequences
+    // stream the results to standard output in Phylip format
+    std::cout << std::fixed << std::setprecision(6);
+    // number of sequences
     std::cout << n << "\n";
-
-    // Subsequent n lines are the matrix rows
     for (size_t i = 0; i < n; ++i) {
-        // First element is the (sorted) sequence name
+        // sequence name
         std::cout << sorted_sketches[i].first;
-
-        // Then, the distances for that row
+        // distances for that row
         for (size_t j = 0; j < n; ++j) {
             std::cout << " " << distance_matrix[i][j];
         }
@@ -113,7 +92,7 @@ void computeDistance(const std::vector<std::string>& sketch_files) {
 }
 
 int main(int argc, char* argv[]) {
-    // This is a good practice for performance with large I/O
+    // good practice for performance with large I/O
     std::ios_base::sync_with_stdio(false);
     std::cin.tie(nullptr);
 
