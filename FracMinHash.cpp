@@ -1,9 +1,7 @@
 #include "FracMinHash.h"
 
 FracMinHash::FracMinHash(double scale, unsigned k, uint64_t seed)
-    : k_(k), scale_(scale), seed_(seed),
-      fw_hash_(0), rc_hash_(0), filled_(0)
-{
+    : k_(k), scale_(scale), seed_(seed), fw_hash_(0), rc_hash_(0), filled_(0){
     if (k == 0 || k > 31) throw std::invalid_argument("k must be in 1..31");
     if (!(scale > 0.0 && scale <= 1.0)) throw std::invalid_argument("scale must be in (0,1]");
 

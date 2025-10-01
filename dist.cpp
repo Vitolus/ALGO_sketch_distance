@@ -4,6 +4,7 @@
 #include <algorithm> // For std::sort
 #include <utility>   // For std::pair
 #include <iomanip>   // For std::fixed and std::setprecision
+#include "FracMinHash.h"
 
 void printUsage(const std::string& program_name){
     std::cerr << "Usage: \n"
