@@ -25,13 +25,6 @@ std::string extractBaseName(const std::string& path){
     return filename;
 }
 
-class Sketch{
-    public:
-    
-    private:
-
-};
-
 void createSketch(const std::string& output_file){
     // print progress messages to stderr
     std::cerr << "Starting sketch creation from standard input...\n";
