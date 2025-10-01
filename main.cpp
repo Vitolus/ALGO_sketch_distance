@@ -1,9 +1,9 @@
+#include <algorithm> // For std::sort
+#include <iomanip>   // For std::fixed and std::setprecision
 #include <iostream>
 #include <string>
-#include <vector>
-#include <algorithm> // For std::sort
 #include <utility>   // For std::pair
-#include <iomanip>   // For std::fixed and std::setprecision
+#include <vector>
 #include "FracMinHash.h"
 
 void printUsage(const std::string& program_name){
@@ -17,10 +17,10 @@ void printUsage(const std::string& program_name){
  */
 std::string extractBaseName(const std::string& path){
     // Find the last slash to remove the directory part
-    size_t last_slash_pos = path.find_last_of("/\\");
+    const size_t last_slash_pos = path.find_last_of("/\\");
     std::string filename = (last_slash_pos == std::string::npos) ? path : path.substr(last_slash_pos + 1);
     // remove file extension if present
-    if(size_t extension_pos = filename.rfind(".sketch"); extension_pos != std::string::npos){
+    if(const size_t extension_pos = filename.rfind(".sketch"); extension_pos != std::string::npos){
         return filename.substr(0, extension_pos);
     }
     return filename;
@@ -30,16 +30,15 @@ void createSketch(const std::string& output_file){
     // print progress messages to stderr
     std::cerr << "Starting sketch creation from standard input...\n";
     std::cerr << "   Output will be saved to: " << output_file << "\n";
-    const double scale = 0.001;
-    const unsigned k = 21;
-    const uint64_t seed = 1469598103934665603ULL;
+    constexpr double scale = 0.001;
+    constexpr unsigned k = 21;
+    constexpr uint64_t seed = 1469598103934665603ULL;
     FracMinHash sketch(scale, k, seed);
     char current_base;
     unsigned long long base_count = 0;
     // reading one character at a time from stdin
     while(std::cin.get(current_base)){
         // upstream commands already filter for ACTG
-        // TODO: add current_base to the sketch
         sketch.add_char(current_base);
         base_count++;
     }
@@ -64,12 +63,12 @@ double computeDistanceBetweenSketches(const std::string& sketch_file1, const std
         return dist; // distance to self is always 0
     }
     try{
-        FracMinHash sketch1 = FracMinHash::load(sketch_file1);
-        FracMinHash sketch2 = FracMinHash::load(sketch_file2);
+        const FracMinHash sketch1 = FracMinHash::load(sketch_file1);
+        const FracMinHash sketch2 = FracMinHash::load(sketch_file2);
         dist = sketch1.distance(sketch2);
     }catch(const std::exception& e){
         std::cerr << "Error reading sketches: " << e.what() << "\n";
-        return -1.0; // indicate error with negative distance
+        return -1.0; // indicate error with a negative distance
     }
     return dist;
 }

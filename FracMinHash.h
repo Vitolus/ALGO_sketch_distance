@@ -1,19 +1,17 @@
 #ifndef ALGO_SKETCH_DISTANCE_FRACMINHASH_H
 #define ALGO_SKETCH_DISTANCE_FRACMINHASH_H
 
+#include <algorithm>
 #include <cstdint>
-#include <vector>
+#include <fstream>
+#include <limits>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
-#include <fstream>
-#include <algorithm>
-#include <stdexcept>
-#include <limits>
-#include <cstring>
 
 class FracMinHash{
 public:
-    // scale in (0,1]; k must be <= 31 (2 bits per base fits in 62 bits)
+    // scale in (0,1]; k must be <= 31 (2 bits per base fit in 62 bits)
     FracMinHash(double scale, unsigned k, uint64_t seed = 1469598103934665603ULL);
 
     // streaming: feed characters from alphabet {A,C,G,T} (case-insensitive). Non-ACGT resets window.
@@ -22,7 +20,7 @@ public:
     // return number of retained hashes
     size_t sketch_size() const;
 
-    // merge: sketches must use same scale and k
+    // merge: sketches must use the same scale and k
     void merge(const FracMinHash &other);
 
     // estimate Jaccard assuming same scale; returns value in [0,1]
@@ -44,7 +42,7 @@ private:
     // current rolling window
     uint64_t fw_hash_;   // forward 2-bit encoding in lower 2k bits
     uint64_t rc_hash_;   // reverse complement encoding
-    unsigned filled_;    // number of consecutive valid bases in window
+    unsigned filled_;    // number of consecutive valid bases in a window
 
     // retained scrambled hashes (the sample)
     std::unordered_set<uint64_t> sketch_;

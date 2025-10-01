@@ -1,15 +1,15 @@
 #include "FracMinHash.h"
 
-FracMinHash::FracMinHash(double scale, unsigned k, uint64_t seed)
+FracMinHash::FracMinHash(const double scale, const unsigned k, const uint64_t seed)
     : k_(k), scale_(scale), seed_(seed), fw_hash_(0), rc_hash_(0), filled_(0){
     if(k == 0 || k > 31) throw std::invalid_argument("k must be in 1..31");
     if(!(scale > 0.0 && scale <= 1.0)) throw std::invalid_argument("scale must be in (0,1]");
     // set threshold as floor(scale * 2^64)
-    long double s = scale_;
-    uint64_t max64 = std::numeric_limits<uint64_t>::max();
-    long double thr_ld = s * ( (long double) max64 );
-    threshold_ = (uint64_t) thr_ld;
-    if(threshold_ == 0) threshold_ = 1; // avoid zero threshold
+    const long double s = scale_;
+    constexpr uint64_t max64 = std::numeric_limits<uint64_t>::max();
+    const long double thr_ld = s * static_cast<long double>(max64);
+    threshold_ = static_cast<uint64_t>(thr_ld);
+    if(threshold_ == 0) threshold_ = 1; // avoid zero thresholds
 }
 
 inline uint64_t FracMinHash::splitmix64(uint64_t x){
@@ -20,7 +20,7 @@ inline uint64_t FracMinHash::splitmix64(uint64_t x){
     return x;
 }
 
-inline int FracMinHash::base_to_code(char c){
+inline int FracMinHash::base_to_code(const char c){
     switch(c){
         case 'A': return 0;
         case 'C': return 1;
@@ -30,13 +30,13 @@ inline int FracMinHash::base_to_code(char c){
     }
 }
 
-inline uint64_t FracMinHash::scramble(uint64_t x, uint64_t seed){
+inline uint64_t FracMinHash::scramble(const uint64_t x, const uint64_t seed){
     // mix kmer integer with seed using splitmix64
     return splitmix64(x ^ seed);
 }
 
-void FracMinHash::add_char(char c){
-    int code = base_to_code(c);
+void FracMinHash::add_char(const char c){
+    const int code = base_to_code(c);
     if(code < 0){
         // reset rolling window on invalid base
         fw_hash_ = rc_hash_ = 0;
@@ -44,25 +44,24 @@ void FracMinHash::add_char(char c){
         return;
     }
     // update forward: shift left 2 bits, add code, keep only 2k bits
-    fw_hash_ = ((fw_hash_ << 2) | (uint64_t)code) & (( (1ULL << (2*k_)) ) - 1ULL);
+    fw_hash_ = ((fw_hash_ << 2) | static_cast<uint64_t>(code)) & ((1ULL << (2*k_)) - 1ULL);
     // update reverse complement: shift right 2 bits and add complement in highest positions
     // complement: A<->T, C<->G => code_comp = 3 - code
-    unsigned comp = 3 - (unsigned)code;
-    // rc_hash_ represented in lower 2k bits as reverse complement of current window
-    rc_hash_ = (rc_hash_ >> 2) | ( (uint64_t)comp << (2*(k_-1)) );
+    const unsigned comp = 3 - static_cast<unsigned>(code);
+    // rc_hash_ represented in lower 2k bits as a reverse complement of the current window
+    rc_hash_ = (rc_hash_ >> 2) | (static_cast<uint64_t>(comp) << (2*(k_-1)));
     if(filled_ < k_){
         ++filled_;
-        if(filled_ < k_)return; // need full window
+        if(filled_ < k_) return; // need a full window
     }
     // add canonical k-mer
     add_kmer_from_window();
 }
 
 void FracMinHash::add_kmer_from_window(){
-    uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
-    uint64_t s = scramble(canonical, seed_);
-    if(s < threshold_){
-        // store the scrambled hash value (store s to simplify comparisons across sketches with same seed/scale)
+    const uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
+    if(const uint64_t s = scramble(canonical, seed_); s < threshold_){
+        // store the scrambled hash value (store s to simplify comparisons across sketches with the same seed / scale)
         sketch_.insert(s);
     }
 }
@@ -91,52 +90,47 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     if(small->size() > big->size()) std::swap(small, big);
     size_t inter = 0;
     for(auto h : *small) if(big->find(h) != big->end()) ++inter;
-    size_t uni = sketch_.size() + other.sketch_.size() - inter;
-    return (uni == 0) ? 0.0 : double(inter) / double(uni);
+    const size_t uni = sketch_.size() + other.sketch_.size() - inter;
+    return (uni == 0) ? 0.0 : static_cast<double>(inter) / static_cast<double>(uni);
 }
 
-double FracMinHash::distance(const FracMinHash &other) const {
+double FracMinHash::distance(const FracMinHash &other) const{
     double j = jaccard(other);
-    if (j < 0.0) j = 0.0;
-    if (j > 1.0) j = 1.0;
+    if(j < 0.0) j = 0.0;
+    if(j > 1.0) j = 1.0;
     return 1.0 - j;
 }
 
-void FracMinHash::save(const std::string &filename) const {
+void FracMinHash::save(const std::string &filename) const{
     std::ofstream out(filename, std::ios::binary);
-    if (!out) throw std::runtime_error("cannot open file for writing: " + filename);
-
+    if(!out) throw std::runtime_error("cannot open file for writing: " + filename);
     // header: magic + version
-    const char magic[4] = {'F','M','H',0};
+    constexpr char magic[4] = {'F', 'M', 'H', 0};
     out.write(magic, 4);
 
     // k (4 bytes), scale (8 bytes double), seed (8 bytes), threshold (8 bytes)
-    uint32_t k32 = k_;
+    const uint32_t k32 = k_;
     out.write(reinterpret_cast<const char*>(&k32), sizeof(k32));
-    double scale_d = scale_;
+    const double scale_d = scale_;
     out.write(reinterpret_cast<const char*>(&scale_d), sizeof(scale_d));
     out.write(reinterpret_cast<const char*>(&seed_), sizeof(seed_));
     out.write(reinterpret_cast<const char*>(&threshold_), sizeof(threshold_));
-
     // number of hashes (8 bytes)
-    uint64_t n = sketch_.size();
+    const uint64_t n = sketch_.size();
     out.write(reinterpret_cast<const char*>(&n), sizeof(n));
-
     // write hashes (8 bytes each) - unsorted order OK
-    for (auto h : sketch_) out.write(reinterpret_cast<const char*>(&h), sizeof(h));
+    for(auto h : sketch_) out.write(reinterpret_cast<const char*>(&h), sizeof(h));
     out.close();
 }
 
-FracMinHash FracMinHash::load(const std::string &filename) {
+FracMinHash FracMinHash::load(const std::string &filename){
     std::ifstream in(filename, std::ios::binary);
-    if (!in) throw std::runtime_error("cannot open file for reading: " + filename);
-
+    if(!in) throw std::runtime_error("cannot open file for reading: " + filename);
     char magic[4];
     in.read(magic, 4);
-    if (in.gcount() != 4 || magic[0] != 'F' || magic[1] != 'M' || magic[2] != 'H') {
+    if(in.gcount() != 4 || magic[0] != 'F' || magic[1] != 'M' || magic[2] != 'H'){
         throw std::runtime_error("invalid sketch file (magic mismatch)");
     }
-
     uint32_t k32;
     in.read(reinterpret_cast<char*>(&k32), sizeof(k32));
     double scale_d;
@@ -148,8 +142,8 @@ FracMinHash FracMinHash::load(const std::string &filename) {
     uint64_t n;
     in.read(reinterpret_cast<char*>(&n), sizeof(n));
 
-    FracMinHash fm(scale_d, (unsigned)k32, seed);
-    fm.threshold_ = threshold; // ensure exact threshold
+    FracMinHash fm(scale_d, k32, seed);
+    fm.threshold_ = threshold; // ensure an exact threshold
     for (uint64_t i = 0; i < n; ++i) {
         uint64_t h;
         in.read(reinterpret_cast<char*>(&h), sizeof(h));
