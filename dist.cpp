@@ -61,11 +61,17 @@ void createSketch(const std::string& output_file){
  */
 double computeDistanceBetweenSketches(const std::string& sketch_file1, const std::string& sketch_file2){
     double dist = 0.0;
-    // The distance from a sequence to itself is always 0.
     if(sketch_file1 == sketch_file2){
-        return dist;
+        return dist; // distance to self is always 0
     }
-    // TODO: add distance computation logic
+    try{
+        FracMinHash sketch1 = FracMinHash::load(sketch_file1);
+        FracMinHash sketch2 = FracMinHash::load(sketch_file2);
+        dist = sketch1.distance(sketch2);
+    }catch(const std::exception& e){
+        std::cerr << "Error reading sketches: " << e.what() << "\n";
+        return -1.0; // indicate error with negative distance
+    }
     return dist;
 }
 
