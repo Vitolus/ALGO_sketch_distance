@@ -11,16 +11,13 @@
 #include <limits>
 #include <cstring>
 
-class FracMinHash {
+class FracMinHash{
 public:
     // scale in (0,1]; k must be <= 31 (2 bits per base fits in 62 bits)
     FracMinHash(double scale, unsigned k, uint64_t seed = 1469598103934665603ULL);
 
     // streaming: feed characters from alphabet {A,C,G,T} (case-insensitive). Non-ACGT resets window.
     void add_char(char c);
-
-    // call when stream ends (not strictly necessary)
-    void finish_stream();
 
     // return number of retained hashes
     size_t sketch_size() const;

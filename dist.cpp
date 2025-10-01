@@ -44,7 +44,6 @@ void createSketch(const std::string& output_file){
         base_count++;
     }
     // finalize and save the sketch
-    sketch.finish_stream();
     try{
         sketch.save(output_file);
     }catch(const std::exception& e){
@@ -116,7 +115,7 @@ void computeDistance(const std::vector<std::string>& sketch_files){
 }
 
 int main(int argc, char* argv[]){
-    // good practice for performance with large I/O
+    // performance with large I/O
     std::ios_base::sync_with_stdio(false);
     std::cin.tie(nullptr);
 

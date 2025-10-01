@@ -2,28 +2,26 @@
 
 FracMinHash::FracMinHash(double scale, unsigned k, uint64_t seed)
     : k_(k), scale_(scale), seed_(seed), fw_hash_(0), rc_hash_(0), filled_(0){
-    if (k == 0 || k > 31) throw std::invalid_argument("k must be in 1..31");
-    if (!(scale > 0.0 && scale <= 1.0)) throw std::invalid_argument("scale must be in (0,1]");
-
+    if(k == 0 || k > 31) throw std::invalid_argument("k must be in 1..31");
+    if(!(scale > 0.0 && scale <= 1.0)) throw std::invalid_argument("scale must be in (0,1]");
     // set threshold as floor(scale * 2^64)
     long double s = scale_;
     uint64_t max64 = std::numeric_limits<uint64_t>::max();
     long double thr_ld = s * ( (long double) max64 );
     threshold_ = (uint64_t) thr_ld;
-    if (threshold_ == 0) threshold_ = 1; // avoid zero threshold
+    if(threshold_ == 0) threshold_ = 1; // avoid zero threshold
 }
 
-inline uint64_t FracMinHash::splitmix64(uint64_t x) {
-    // splitmix64 scramble
-    x += 0x9e3779b97f4a7c15ULL;
-    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
-    x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
-    x = x ^ (x >> 31);
+inline uint64_t FracMinHash::splitmix64(uint64_t x){
+    x += 0x9e3779b97f4a7c15ULL; // add golden ratio
+    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL; // mix bits thoroughly
+    x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL; // more mixing
+    x = x ^ (x >> 31); // final avalanche
     return x;
 }
 
-inline int FracMinHash::base_to_code(char c) {
-    switch(c) {
+inline int FracMinHash::base_to_code(char c){
+    switch(c){
         case 'A': return 0;
         case 'C': return 1;
         case 'G': return 2;
@@ -32,81 +30,69 @@ inline int FracMinHash::base_to_code(char c) {
     }
 }
 
-inline uint64_t FracMinHash::scramble(uint64_t x, uint64_t seed) {
+inline uint64_t FracMinHash::scramble(uint64_t x, uint64_t seed){
     // mix kmer integer with seed using splitmix64
     return splitmix64(x ^ seed);
 }
 
-void FracMinHash::add_char(char c) {
+void FracMinHash::add_char(char c){
     int code = base_to_code(c);
-    if (code < 0) {
+    if(code < 0){
         // reset rolling window on invalid base
         fw_hash_ = rc_hash_ = 0;
         filled_ = 0;
         return;
     }
-
     // update forward: shift left 2 bits, add code, keep only 2k bits
     fw_hash_ = ((fw_hash_ << 2) | (uint64_t)code) & (( (1ULL << (2*k_)) ) - 1ULL);
-
     // update reverse complement: shift right 2 bits and add complement in highest positions
     // complement: A<->T, C<->G => code_comp = 3 - code
     unsigned comp = 3 - (unsigned)code;
     // rc_hash_ represented in lower 2k bits as reverse complement of current window
     rc_hash_ = (rc_hash_ >> 2) | ( (uint64_t)comp << (2*(k_-1)) );
-
-    if (filled_ < k_) {
+    if(filled_ < k_){
         ++filled_;
-        if (filled_ < k_) return; // need full window
+        if(filled_ < k_)return; // need full window
     }
-
     // add canonical k-mer
     add_kmer_from_window();
 }
 
-void FracMinHash::add_kmer_from_window() {
+void FracMinHash::add_kmer_from_window(){
     uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
     uint64_t s = scramble(canonical, seed_);
-    if (s < threshold_) {
-        // store the scrambled hash value (we store s to simplify comparisons across sketches with same seed/scale)
+    if(s < threshold_){
+        // store the scrambled hash value (store s to simplify comparisons across sketches with same seed/scale)
         sketch_.insert(s);
     }
 }
 
-void FracMinHash::finish_stream() {
-    // no-op for this implementation
-}
-
-size_t FracMinHash::sketch_size() const {
+size_t FracMinHash::sketch_size() const{
     return sketch_.size();
 }
 
-void FracMinHash::merge(const FracMinHash &other) {
-    if (k_ != other.k_) throw std::invalid_argument("k mismatch in merge");
-    if (scale_ != other.scale_) throw std::invalid_argument("scale mismatch in merge");
-    if (seed_ != other.seed_) throw std::invalid_argument("seed mismatch in merge");
+void FracMinHash::merge(const FracMinHash &other){
+    if(k_ != other.k_) throw std::invalid_argument("k mismatch in merge");
+    if(scale_ != other.scale_) throw std::invalid_argument("scale mismatch in merge");
+    if(seed_ != other.seed_) throw std::invalid_argument("seed mismatch in merge");
     // union of sets
-    for (auto h : other.sketch_) sketch_.insert(h);
+    for(auto h : other.sketch_) sketch_.insert(h);
 }
 
-double FracMinHash::jaccard(const FracMinHash &other) const {
-    if (k_ != other.k_) throw std::invalid_argument("k mismatch in jaccard");
-    if (scale_ != other.scale_) throw std::invalid_argument("scale mismatch in jaccard");
-    if (seed_ != other.seed_) throw std::invalid_argument("seed mismatch in jaccard");
-
-    if (sketch_.empty() && other.sketch_.empty()) return 1.0;
-    if (sketch_.empty() || other.sketch_.empty()) return 0.0;
-
+double FracMinHash::jaccard(const FracMinHash &other) const{
+    if(k_ != other.k_) throw std::invalid_argument("k mismatch in jaccard");
+    if(scale_ != other.scale_) throw std::invalid_argument("scale mismatch in jaccard");
+    if(seed_ != other.seed_) throw std::invalid_argument("seed mismatch in jaccard");
+    if(sketch_.empty() && other.sketch_.empty()) return 1.0;
+    if(sketch_.empty() || other.sketch_.empty()) return 0.0;
     // compute intersection size
     const std::unordered_set<uint64_t> *small = &sketch_;
     const std::unordered_set<uint64_t> *big = &other.sketch_;
-    if (small->size() > big->size()) std::swap(small, big);
-
+    if(small->size() > big->size()) std::swap(small, big);
     size_t inter = 0;
-    for (auto h : *small) if (big->find(h) != big->end()) ++inter;
+    for(auto h : *small) if(big->find(h) != big->end()) ++inter;
     size_t uni = sketch_.size() + other.sketch_.size() - inter;
-    if (uni == 0) return 0.0;
-    return double(inter) / double(uni);
+    return (uni == 0) ? 0.0 : double(inter) / double(uni);
 }
 
 double FracMinHash::distance(const FracMinHash &other) const {
