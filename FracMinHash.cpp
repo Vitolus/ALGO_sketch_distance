@@ -23,12 +23,11 @@ inline uint64_t FracMinHash::splitmix64(uint64_t x) {
 }
 
 inline int FracMinHash::base_to_code(char c) {
-    // Accept uppercase or lowercase
     switch(c) {
-        case 'A': case 'a': return 0;
-        case 'C': case 'c': return 1;
-        case 'G': case 'g': return 2;
-        case 'T': case 't': return 3;
+        case 'A': return 0;
+        case 'C': return 1;
+        case 'G': return 2;
+        case 'T': return 3;
         default: return -1; // N or other -> invalid
     }
 }
