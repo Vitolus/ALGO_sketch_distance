@@ -30,17 +30,29 @@ void createSketch(const std::string& output_file){
     // print progress messages to stderr
     std::cerr << "Starting sketch creation from standard input...\n";
     std::cerr << "   Output will be saved to: " << output_file << "\n";
-    // TODO: initialize sketching data structure
+    const double scale = 0.001;
+    const unsigned k = 21;
+    const uint64_t seed = 1469598103934665603ULL;
+    FracMinHash sketch(scale, k, seed);
     char current_base;
     unsigned long long base_count = 0;
     // reading one character at a time from stdin
     while(std::cin.get(current_base)){
         // upstream commands already filter for ACTG
         // TODO: add current_base to the sketch
+        sketch.add_char(current_base);
         base_count++;
     }
     // finalize and save the sketch
+    sketch.finish_stream();
+    try{
+        sketch.save(output_file);
+    }catch(const std::exception& e){
+        std::cerr << "Error saving sketch: " << e.what() << "\n";
+        return;
+    }
     std::cerr << "   Processed " << base_count << " bases.\n";
+    std::cerr << "   Retained " << sketch.sketch_size() << " hashes in the sketch.\n";
     std::cerr << "   Sketch saved successfully to " << output_file << ".\n";
 }
 
