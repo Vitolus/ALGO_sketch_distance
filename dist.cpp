@@ -82,13 +82,16 @@ void computeDistance(const std::vector<std::string>& sketch_files){
     const size_t n = sketch_files.size();
     // store pairs of <base_name, original_path>
     std::vector<std::pair<std::string, std::string>> sorted_sketches;
+    sorted_sketches.reserve(n);
     for(const auto& path : sketch_files){
         sorted_sketches.emplace_back(extractBaseName(path), path);
     }
     // Sort the vector of pairs
-    std::sort(sorted_sketches.begin(), sorted_sketches.end());
+    std::sort(sorted_sketches.begin(), sorted_sketches.end(), [](const auto& a, const auto& b){
+        return a.first < b.first;
+    });
     // compute and store the n x n distance matrix
-    std::vector<std::vector<double>> distance_matrix(n, std::vector<double>(n));
+    std::vector<std::vector<double>> distance_matrix(n, std::vector<double>(n, 0.0));
     for(size_t i = 0; i < n; ++i){
         for(size_t j = 0; j < n; ++j){
             // use the original paths for the calculation
