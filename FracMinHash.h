@@ -14,22 +14,34 @@ public:
     // scale in (0,1]; k must be <= 31 (2 bits per base fit in 62 bits)
     FracMinHash(double scale, unsigned k, uint64_t seed = 1469598103934665603ULL);
 
-    // streaming: feed characters from alphabet {A,C,G,T} (case-insensitive). Non-ACGT resets window.
+    /**
+     * @brief add one base (ACGT); other characters reset the rolling window
+     */
     void add_char(char c);
 
-    // return number of retained hashes
+    /**
+     * @brief number of hashes in the sketch
+     */
     size_t sketch_size() const;
 
-    // merge: sketches must use the same scale and k
+    /**
+     * @brief merge: sketches must use the same scale and k
+     */
     void merge(const FracMinHash &other);
 
-    // estimate Jaccard assuming same scale; returns value in [0,1]
+    /**
+     * @brief estimate Jaccard assuming same scale; returns value in [0,1]
+     */
     double jaccard(const FracMinHash &other) const;
 
-    // distance = 1 - Jaccard
+    /**
+     * @brief distance = 1 - Jaccard
+     */
     double distance(const FracMinHash &other) const;
 
-    // save/load binary sketch file (compact: first k, then scale as double, seed, then size and 8-byte hashes)
+    /**
+     * @brief save/load binary sketch file (compact: first k, then scale as double, seed, then size and 8-byte hashes)
+     */
     void save(const std::string &filename) const;
     static FracMinHash load(const std::string &filename);
 
