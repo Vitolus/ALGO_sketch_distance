@@ -1,8 +1,8 @@
-#include <algorithm> // For std::sort
-#include <iomanip>   // For std::fixed and std::setprecision
+#include <algorithm>
+#include <iomanip>
 #include <iostream>
 #include <string>
-#include <utility>   // For std::pair
+#include <utility>
 #include <vector>
 #include "FracMinHash.h"
 
@@ -91,11 +91,14 @@ void computeDistance(const std::vector<std::string>& sketch_files){
     // compute and store the n x n distance matrix
     std::vector<std::vector<double>> distance_matrix(n, std::vector<double>(n, 0.0));
     for(size_t i = 0; i < n; ++i){
-        for(size_t j = 0; j < n; ++j){
+        distance_matrix[i][i] = 0.0;
+        for(size_t j = i + 1; j < n; ++j){ // matrix is symmetric (compute only upper triangle)
             // use the original paths for the calculation
             const std::string& file1 = sorted_sketches[i].second;
             const std::string& file2 = sorted_sketches[j].second;
-            distance_matrix[i][j] = computeDistanceBetweenSketches(file1, file2);
+            const double dist = computeDistanceBetweenSketches(file1, file2);
+            distance_matrix[i][j] = dist;
+            distance_matrix[j][i] = dist; // assign symmetric value
         }
     }
     // stream the results to standard output in Phylip format

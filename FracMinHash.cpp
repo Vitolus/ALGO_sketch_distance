@@ -89,9 +89,9 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     const std::unordered_set<uint64_t> *big = &other.sketch_;
     if(small->size() > big->size()) std::swap(small, big);
     size_t inter = 0;
-    for(auto h : *small) if(big->find(h) != big->end()) ++inter;
-    const size_t uni = sketch_.size() + other.sketch_.size() - inter;
-    return (uni == 0) ? 0.0 : static_cast<double>(inter) / static_cast<double>(uni);
+    for(auto h : *small) if(big->find(h) != big->end()) ++inter; // count intersection
+    const size_t uni = sketch_.size() + other.sketch_.size() - inter; // union size
+    return (uni == 0) ? 0.0 : static_cast<double>(inter) / static_cast<double>(uni); // Jaccard index
 }
 
 double FracMinHash::distance(const FracMinHash &other) const{
@@ -107,7 +107,6 @@ void FracMinHash::save(const std::string &filename) const{
     // header: magic + version
     constexpr char magic[4] = {'F', 'M', 'H', 0};
     out.write(magic, 4);
-
     // k (4 bytes), scale (8 bytes double), seed (8 bytes), threshold (8 bytes)
     const uint32_t k32 = k_;
     out.write(reinterpret_cast<const char*>(&k32), sizeof(k32));
@@ -141,7 +140,6 @@ FracMinHash FracMinHash::load(const std::string &filename){
     in.read(reinterpret_cast<char*>(&threshold), sizeof(threshold));
     uint64_t n;
     in.read(reinterpret_cast<char*>(&n), sizeof(n));
-
     FracMinHash fm(scale_d, k32, seed);
     fm.threshold_ = threshold; // ensure an exact threshold
     for (uint64_t i = 0; i < n; ++i) {
