@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <complex>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -8,8 +9,12 @@
 
 void printUsage(const std::string& program_name){
     std::cerr << "Usage: \n"
-              << "  " << program_name << " --create-sketch <output.sketch>\n"
-              << "  " << program_name << " --distance <G1.sketch> <G2.sketch> ...\n";
+              << program_name << " --create-sketch [options] <output.sketch>\n"
+              << program_name << " --distance <G1.sketch> <G2.sketch>\n\n"
+              << "Options for --create-sketch:\n"
+              << "--k <int>    K-mer size (default: 21)\n"
+              << "--scale <float>    Scaling factor for sketch size (default: 0.001)\n"
+              << "--seed <int>    Seed for hashing (default: 1469598103934665603)\n";
 }
 
 /**
@@ -26,13 +31,11 @@ std::string extractBaseName(const std::string& path){
     return filename;
 }
 
-void createSketch(const std::string& output_file){
+void createSketch(const std::string& output_file, const unsigned k, const double scale, const uint64_t seed){
     // print progress messages to stderr
     std::cerr << "Starting sketch creation from standard input...\n";
+    std::cerr << "   Parameters: k=" << k << ", scale=" << scale << ", seed=" << seed << "\n";
     std::cerr << "   Output will be saved to: " << output_file << "\n";
-    constexpr double scale = 0.001;
-    constexpr unsigned k = 21;
-    constexpr uint64_t seed = 1469598103934665603ULL;
     FracMinHash sketch(scale, k, seed);
     char current_base;
     unsigned long long base_count = 0;
@@ -49,9 +52,9 @@ void createSketch(const std::string& output_file){
         std::cerr << "Error saving sketch: " << e.what() << "\n";
         return;
     }
-    std::cerr << "   Processed " << base_count << " bases.\n";
-    std::cerr << "   Retained " << sketch.sketch_size() << " hashes in the sketch.\n";
-    std::cerr << "   Sketch saved successfully to " << output_file << ".\n";
+    std::cerr << "   Processed " << base_count << " bases\n";
+    std::cerr << "   Retained " << sketch.sketch_size() << " hashes in the sketch\n";
+    std::cerr << "   Sketch saved successfully to " << output_file << "\n";
 }
 
 /**
@@ -125,13 +128,66 @@ int main(int argc, char* argv[]){
         printUsage(argv[0]);
         return 1;
     }
-    if(std::string command = argv[1]; command == "--create-sketch"){
-        if (argc != 3) {
+    if(const std::string command = argv[1]; command == "--create-sketch"){
+        if (argc < 3) {
             std::cerr << "Error: --create-sketch requires exactly one output file name.\n";
             printUsage(argv[0]);
             return 1;
         }
-        createSketch(argv[2]);
+        unsigned k = 21;
+        double scale = 0.001;
+        uint64_t seed = 1469598103934665603ULL;
+        std::string output_file;
+        for(int i = 2; i < argc; i++){
+            if(std::string arg = argv[i]; arg == "--k"){
+                if(i + 1 >= argc){
+                    std::cerr << "Error: --k requires an integer argument.\n";
+                    printUsage(argv[0]);
+                    return 1;
+                }
+                try{
+                    k = std::stoi(argv[++i]);
+                }catch(const std::exception& e){
+                    std::cerr << "Error: --k argument must be an integer: " << e.what() << "\n";
+                }
+            }else if(arg == "--scale"){
+                if(i + 1 >= argc){
+                    std::cerr << "Error: --scale requires a double argument.\n";
+                    printUsage(argv[0]);
+                    return 1;
+                }
+                try{
+                    scale = std::stod(argv[++i]);
+                }catch(const std::exception& e){
+                    std::cerr << "Error: --scale argument must be a double: " << e.what() << "\n";
+                }
+            }else if(arg == "--seed"){
+                if(i + 1 >= argc){
+                    std::cerr << "Error: --seed requires an long argument.\n";
+                    printUsage(argv[0]);
+                    return 1;
+                }
+                try{
+                    seed = std::stoll(argv[++i]);
+                }catch(const std::exception& e){
+                    std::cerr << "Error: --seed argument must be an integer: " << e.what() << "\n";
+                }
+            }else{
+                // assume it's the output file name
+                if(!output_file.empty()){
+                    std::cerr << "Error: only one output file name is allowed.\n";
+                    printUsage(argv[0]);
+                    return 1;
+                }
+                output_file = argv[i];
+            }
+        }
+        if(output_file.empty()){
+            std::cerr << "Error: output file name is required.\n";
+            printUsage(argv[0]);
+            return 1;
+        }
+        createSketch(output_file, k, scale, seed);
     }else if(command == "--distance"){
         if(argc < 4){
             std::cerr << "Error: --distance requires at least two sketch files.\n";
