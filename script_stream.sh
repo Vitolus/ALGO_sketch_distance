@@ -32,14 +32,28 @@ species_paths="homo_sapiens
 			   dicentrarchus_labrax
 			   gadus_morhua"
 
+# common process steps
+process_stream(){
+  # Remove FASTA header lines (starting with '>')
+  grep -v '^>' | \
+  # Convert to uppercase
+  tr '[:lower:]' '[:upper:]' | \
+  # Keep only ACTG characters
+  tr -Cd ACTG
+}
 
-
-print_help() {
-  echo "Usage: $0 -s <species_name> [-l <limit_bytes>]"
+print_help(){
+  echo "Usage: $0 [-s <species_name>] [-l <limit_bytes>]"
   echo ""
-  echo "Options:"
-  echo "  -s   Species name (required)"
-  echo "  -l   Limit in bytes (optional)"
+  echo "Description:"
+  echo "  Streams and cleans a genome sequence from a URL or standard input."
+  echo "  Use -s to fetch from a URL, or pipe data via stdin if -s is omitted."
+  echo ""
+  echo "Input Options:"
+  echo "  -s   Species name (fetches from Ensembl URL)"
+  echo ""
+  echo "Other Options:"
+  echo "  -l   Limit in bytes for URL downloads (optional)"
   echo "  -h   Show this help message"
   echo ""
   echo "Available species:"
@@ -58,44 +72,48 @@ while getopts "s:l:h" opt; do
   esac
 done
 
-[ -z "$species" ] && echo "Error: species required (-s)" && print_help && exit 1
+# case 1: Read from a species URL (-s)
+if [ -n "$species" ]; then
+  # Verify species is supported
+  found="false"
+  i=1
+  for name in $species_names; do
+    if [ "$species" = "$name" ]; then
+      found="true"
+      j=1
+      for path in $species_paths; do
+        [ $j -eq $i ] && species_path=$path && break
+        j=$((j+1))
+      done
+      break
+    fi
+    i=$((i+1))
+  done
 
-# Verify species is supported
-found="false"
-i=1
-for name in $species_names; do
-  if [ "$species" = "$name" ]; then
-    found="true"
-    j=1
-    for path in $species_paths; do
-      [ $j -eq $i ] && species_path=$path && break
-      j=$((j+1))
-    done
-    break
-  fi
-  i=$((i+1))
-done
+  [ "$found" = "false" ] && echo "Unsupported species: $species" >&2 && print_help && exit 1
 
-[ "$found" = "false" ] && echo "Unsupported species: $species" && print_help && exit 1
+  base_url="https://ftp.ensembl.org/pub/release-110/fasta/$species_path/dna/"
 
-base_url="https://ftp.ensembl.org/pub/release-110/fasta/$species_path/dna/"
+  # Try to find a valid FASTA file
+  file_name=$(curl -s "$base_url" | grep -oE '[^"]+\.dna\.primary_assembly\.fa\.gz' | head -n1)
 
-# Try to find a valid FASTA file
-file_name=$(curl -s "$base_url" | grep -oE '[^"]+\.dna\.primary_assembly\.fa\.gz' | head -n1)
+  # Fallback to toplevel
+  [ -z "$file_name" ] && file_name=$(curl -s "$base_url" | grep -oE '[^"]+\.dna\.toplevel\.fa\.gz' | head -n1)
 
-# Fallback to toplevel
-[ -z "$file_name" ] && file_name=$(curl -s "$base_url" | grep -oE '[^"]+\.dna\.toplevel\.fa\.gz' | head -n1)
+  [ -z "$file_name" ] && echo "No suitable FASTA file found for $species" >&2 && exit 1
 
-[ -z "$file_name" ] && echo "No suitable FASTA file found for $species" && exit 1
+  full_url="$base_url$file_name"
 
-full_url="$base_url$file_name"
+  # Build and run curl + filters
+  curl_opts="-sL"
+  [ -n "$limit" ] && curl_opts="$curl_opts --range 0-$limit"
 
-# Build and run curl + filters
-curl_opts="-sL"
-[ -n "$limit" ] && curl_opts="$curl_opts --range 0-$limit"
-
-curl $curl_opts "$full_url" 2>/dev/null \
+  curl $curl_opts "$full_url" 2>/dev/null \
   | gunzip -c 2>/dev/null \
-  | grep -v '^>' \
-  | tr '[:lower:]' '[:upper:]' \
-  | tr -Cd ACTG 
+  | process_stream
+
+# case 2: Read from stdin
+else
+  # if no -s is given, assume data is being piped in
+  process_stream
+fi
