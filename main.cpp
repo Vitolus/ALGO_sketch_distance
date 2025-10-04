@@ -6,9 +6,16 @@
 #include <utility>
 #include <vector>
 #include "FracMinHash.h"
+#include "phylogenerator.h"
 
-void printUsage(const std::string& program_name){
-    std::cerr << "Usage: \n"
+using std::cerr;
+using std::cout;
+using std::endl;
+using std::string;
+using std::vector;
+
+void printUsage(const string& program_name){
+    cerr << "Usage: \n"
               << program_name << " --create-sketch [options] <output.sketch>\n"
               << program_name << " --distance <G1.sketch> <G2.sketch>\n\n"
               << "Options for --create-sketch:\n"
@@ -20,22 +27,22 @@ void printUsage(const std::string& program_name){
 /**
  * @brief helper function to get a sequence name from a file path
  */
-std::string extractBaseName(const std::string& path){
+string extractBaseName(const string& path){
     // Find the last slash to remove the directory part
     const size_t last_slash_pos = path.find_last_of("/\\");
-    std::string filename = (last_slash_pos == std::string::npos) ? path : path.substr(last_slash_pos + 1);
+    string filename = (last_slash_pos == string::npos) ? path : path.substr(last_slash_pos + 1);
     // remove file extension if present
-    if(const size_t extension_pos = filename.rfind(".sketch"); extension_pos != std::string::npos){
+    if(const size_t extension_pos = filename.rfind(".sketch"); extension_pos != string::npos){
         return filename.substr(0, extension_pos);
     }
     return filename;
 }
 
-void createSketch(const std::string& output_file, const unsigned k, const double scale, const uint64_t seed){
+void createSketch(const string& output_file, const unsigned k, const double scale, const uint64_t seed){
     // print progress messages to stderr
-    std::cerr << "Starting sketch creation from standard input...\n";
-    std::cerr << "   Parameters: k=" << k << ", scale=" << scale << ", seed=" << seed << "\n";
-    std::cerr << "   Output will be saved to: " << output_file << "\n";
+    cerr << "Starting sketch creation from standard input...\n";
+    cerr << "   Parameters: k=" << k << ", scale=" << scale << ", seed=" << seed << endl;
+    cerr << "   Output will be saved to: " << output_file << endl;
     FracMinHash sketch(scale, k, seed);
     char current_base;
     unsigned long long base_count = 0;
@@ -49,18 +56,18 @@ void createSketch(const std::string& output_file, const unsigned k, const double
     try{
         sketch.save(output_file);
     }catch(const std::exception& e){
-        std::cerr << "Error saving sketch: " << e.what() << "\n";
+        cerr << "Error saving sketch: " << e.what() << endl;
         return;
     }
-    std::cerr << "   Processed " << base_count << " bases\n";
-    std::cerr << "   Retained " << sketch.sketch_size() << " hashes in the sketch\n";
-    std::cerr << "   Sketch saved successfully to " << output_file << "\n";
+    cerr << "   Processed " << base_count << " bases\n";
+    cerr << "   Retained " << sketch.sketch_size() << " hashes in the sketch\n";
+    cerr << "   Sketch saved successfully to " << output_file << endl;
 }
 
 /**
  * @brief load two sketch files and compute their distance.
  */
-double computeDistanceBetweenSketches(const std::string& sketch_file1, const std::string& sketch_file2){
+double computeDistanceBetweenSketches(const string& sketch_file1, const string& sketch_file2){
     double dist = 0.0;
     if(sketch_file1 == sketch_file2){
         return dist; // distance to self is always 0
@@ -70,7 +77,7 @@ double computeDistanceBetweenSketches(const std::string& sketch_file1, const std
         const FracMinHash sketch2 = FracMinHash::load(sketch_file2);
         dist = sketch1.distance(sketch2);
     }catch(const std::exception& e){
-        std::cerr << "Error reading sketches: " << e.what() << "\n";
+        cerr << "Error reading sketches: " << e.what() << endl;
         return -1.0; // indicate error with a negative distance
     }
     return dist;
@@ -79,10 +86,10 @@ double computeDistanceBetweenSketches(const std::string& sketch_file1, const std
 /**
  * @brief Compute and print the n x n distance matrix in Phylip format.
  */
-void computeDistance(const std::vector<std::string>& sketch_files){
+vector<vector<double>> computeDistance(const vector<string>& sketch_files){
     const size_t n = sketch_files.size();
     // store pairs of <base_name, original_path>
-    std::vector<std::pair<std::string, std::string>> sorted_sketches;
+    vector<std::pair<string, string>> sorted_sketches;
     sorted_sketches.reserve(n);
     for(const auto& path : sketch_files){
         sorted_sketches.emplace_back(extractBaseName(path), path);
@@ -92,31 +99,32 @@ void computeDistance(const std::vector<std::string>& sketch_files){
         return a.first < b.first;
     });
     // compute and store the n x n distance matrix
-    std::vector<std::vector<double>> distance_matrix(n, std::vector<double>(n, 0.0));
+    vector<vector<double>> distance_matrix(n, vector<double>(n, 0.0));
     for(size_t i = 0; i < n; ++i){
         distance_matrix[i][i] = 0.0;
         for(size_t j = i + 1; j < n; ++j){ // matrix is symmetric (compute only upper triangle)
             // use the original paths for the calculation
-            const std::string& file1 = sorted_sketches[i].second;
-            const std::string& file2 = sorted_sketches[j].second;
+            const string& file1 = sorted_sketches[i].second;
+            const string& file2 = sorted_sketches[j].second;
             const double dist = computeDistanceBetweenSketches(file1, file2);
             distance_matrix[i][j] = dist;
             distance_matrix[j][i] = dist; // assign symmetric value
         }
     }
     // stream the results to standard output in Phylip format
-    std::cout << std::fixed << std::setprecision(6);
+    cout << std::fixed << std::setprecision(6);
     // number of sequences
-    std::cout << n << "\n";
+    cout << n << endl;
     for(size_t i = 0; i < n; ++i){
         // sequence name
-        std::cout << sorted_sketches[i].first;
+        cout << sorted_sketches[i].first;
         // distances for that row
         for(size_t j = 0; j < n; ++j){
-            std::cout << " " << distance_matrix[i][j];
+            cout << " " << distance_matrix[i][j];
         }
-        std::cout << "\n";
+        cout << endl;
     }
+    return distance_matrix;
 }
 
 int main(int argc, char* argv[]){
@@ -128,54 +136,55 @@ int main(int argc, char* argv[]){
         printUsage(argv[0]);
         return 1;
     }
-    if(const std::string command = argv[1]; command == "--create-sketch"){
+    vector<vector<double>> distance_matrix;
+    if(const string command = argv[1]; command == "--create-sketch"){
         if (argc < 3) {
-            std::cerr << "Error: --create-sketch requires exactly one output file name.\n";
+            cerr << "Error: --create-sketch requires exactly one output file name.\n";
             printUsage(argv[0]);
             return 1;
         }
         unsigned k = 21;
         double scale = 0.001;
         uint64_t seed = 1469598103934665603ULL;
-        std::string output_file;
+        string output_file;
         for(int i = 2; i < argc; i++){
-            if(std::string arg = argv[i]; arg == "--k"){
+            if(string arg = argv[i]; arg == "--k"){
                 if(i + 1 >= argc){
-                    std::cerr << "Error: --k requires an integer argument.\n";
+                    cerr << "Error: --k requires an integer argument.\n";
                     printUsage(argv[0]);
                     return 1;
                 }
                 try{
                     k = std::stoi(argv[++i]);
                 }catch(const std::exception& e){
-                    std::cerr << "Error: --k argument must be an integer: " << e.what() << "\n";
+                    cerr << "Error: --k argument must be an integer: " << e.what() << endl;
                 }
             }else if(arg == "--scale"){
                 if(i + 1 >= argc){
-                    std::cerr << "Error: --scale requires a double argument.\n";
+                    cerr << "Error: --scale requires a double argument.\n";
                     printUsage(argv[0]);
                     return 1;
                 }
                 try{
                     scale = std::stod(argv[++i]);
                 }catch(const std::exception& e){
-                    std::cerr << "Error: --scale argument must be a double: " << e.what() << "\n";
+                    cerr << "Error: --scale argument must be a double: " << e.what() << endl;
                 }
             }else if(arg == "--seed"){
                 if(i + 1 >= argc){
-                    std::cerr << "Error: --seed requires an long argument.\n";
+                    cerr << "Error: --seed requires an long argument.\n";
                     printUsage(argv[0]);
                     return 1;
                 }
                 try{
                     seed = std::stoll(argv[++i]);
                 }catch(const std::exception& e){
-                    std::cerr << "Error: --seed argument must be an integer: " << e.what() << "\n";
+                    cerr << "Error: --seed argument must be an integer: " << e.what() << endl;
                 }
             }else{
                 // assume it's the output file name
                 if(!output_file.empty()){
-                    std::cerr << "Error: only one output file name is allowed.\n";
+                    cerr << "Error: only one output file name is allowed.\n";
                     printUsage(argv[0]);
                     return 1;
                 }
@@ -183,26 +192,27 @@ int main(int argc, char* argv[]){
             }
         }
         if(output_file.empty()){
-            std::cerr << "Error: output file name is required.\n";
+            cerr << "Error: output file name is required.\n";
             printUsage(argv[0]);
             return 1;
         }
         createSketch(output_file, k, scale, seed);
     }else if(command == "--distance"){
         if(argc < 4){
-            std::cerr << "Error: --distance requires at least two sketch files.\n";
+            cerr << "Error: --distance requires at least two sketch files.\n";
             printUsage(argv[0]);
             return 1;
         }
-        std::vector<std::string> files;
+        vector<string> files;
         for(int i = 2; i < argc; ++i){
             files.emplace_back(argv[i]);
         }
-        computeDistance(files);
+        distance_matrix = computeDistance(files);
     }else{
-        std::cerr << "Error: Unknown command '" << command << "'.\n";
+        cerr << "Error: Unknown command '" << command << "'.\n";
         printUsage(argv[0]);
         return 1;
     }
     return 0;
+
 }
