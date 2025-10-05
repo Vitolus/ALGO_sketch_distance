@@ -35,6 +35,7 @@ struct Node{
     }
 };
 
+// TODO: build also graphic view of the tree
 /**
  * @brief convert a tree to Newick format
  */
@@ -183,7 +184,7 @@ inline std::string buildNJTree(const std::vector<std::string>& names, const std:
             double dist = (current_matrix[min_i][k] + current_matrix[min_j][k] - dist_ij) / 2.0;
             new_distances.push_back(dist);
         }
-        std::vector<std::vector<double>> next_matrix(n - 1, std::vector<double>(n - 1));
+        std::vector next_matrix(n - 1, std::vector<double>(n - 1));
         int r_new = 1;
         for(int r = 0; r < n; r++){
             if(r == min_i || r == min_j) continue;
