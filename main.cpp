@@ -14,14 +14,17 @@ using std::endl;
 using std::string;
 using std::vector;
 
-void printUsage(const string& program_name){
-    cerr << "Usage: \n"
-              << program_name << " --create-sketch [options] <output.sketch>\n"
-              << program_name << " --distance <G1.sketch> <G2.sketch>\n\n"
+void printUsage(const std::string& program_name) {
+    std::cerr << "Usage: \n"
+              << "  " << program_name << " --create-sketch [options] <output.sketch>\n"
+              << "  " << program_name << " --distance <G1.sketch> <G2.sketch> ...\n\n"
+              << "Commands:\n"
+              << "  --create-sketch  Creates a sketch from a genome sequence provided via stdin.\n"
+              << "  --distance       Calculates and prints the distance matrix, UPGMA tree, and NJ tree.\n\n"
               << "Options for --create-sketch:\n"
-              << "--k <int>    K-mer size (default: 21)\n"
-              << "--scale <float>    Scaling factor for sketch size (default: 0.001)\n"
-              << "--seed <int>    Seed for hashing (default: 1469598103934665603)\n";
+              << "  --k <int>        K-mer size (default: 21)\n"
+              << "  --scale <float>  Scaling factor (default: 0.001)\n"
+              << "  --seed <int>     Seed for hashing (default: 1469598103934665603)\n";
 }
 
 /**
@@ -86,7 +89,7 @@ double computeDistanceBetweenSketches(const string& sketch_file1, const string& 
 /**
  * @brief Compute and print the n x n distance matrix in Phylip format.
  */
-vector<vector<double>> computeDistance(const vector<string>& sketch_files){
+std::pair<std::vector<std::string>, std::vector<std::vector<double>>> computeDistance(const vector<string>& sketch_files){
     const size_t n = sketch_files.size();
     // store pairs of <base_name, original_path>
     vector<std::pair<string, string>> sorted_sketches;
@@ -95,48 +98,44 @@ vector<vector<double>> computeDistance(const vector<string>& sketch_files){
         sorted_sketches.emplace_back(extractBaseName(path), path);
     }
     // Sort the vector of pairs
-    std::sort(sorted_sketches.begin(), sorted_sketches.end(), [](const auto& a, const auto& b){
-        return a.first < b.first;
-    });
+    std::sort(sorted_sketches.begin(), sorted_sketches.end());
     // compute and store the n x n distance matrix
-    vector<vector<double>> distance_matrix(n, vector<double>(n, 0.0));
-    for(size_t i = 0; i < n; ++i){
-        distance_matrix[i][i] = 0.0;
-        for(size_t j = i + 1; j < n; ++j){ // matrix is symmetric (compute only upper triangle)
+    std::vector<std::string> names(n);
+    std::vector<std::vector<double>> matrix(n, std::vector<double>(n));
+    for(size_t i = 0; i < n; i++){
+        names[i] = sorted_sketches[i].first;
+        for(size_t j = i + 1; j < n; j++){ // matrix is symmetric (compute only upper triangle)
             // use the original paths for the calculation
-            const string& file1 = sorted_sketches[i].second;
-            const string& file2 = sorted_sketches[j].second;
-            const double dist = computeDistanceBetweenSketches(file1, file2);
-            distance_matrix[i][j] = dist;
-            distance_matrix[j][i] = dist; // assign symmetric value
+            const double dist = computeDistanceBetweenSketches(sorted_sketches[i].second, sorted_sketches[j].second);
+            matrix[i][j] = matrix[j][i] = dist;
         }
     }
-    // stream the results to standard output in Phylip format
-    cout << std::fixed << std::setprecision(6);
-    // number of sequences
-    cout << n << endl;
-    for(size_t i = 0; i < n; ++i){
-        // sequence name
-        cout << sorted_sketches[i].first;
-        // distances for that row
-        for(size_t j = 0; j < n; ++j){
-            cout << " " << distance_matrix[i][j];
+    return {names, matrix};
+}
+
+/**
+ * @brief print distance matrix in Phylip format
+ */
+void printDistanceMatrix(const std::vector<std::string>& names, const std::vector<std::vector<double>>& matrix) {
+    std::cout << std::fixed << std::setprecision(6);
+    std::cout << names.size() << "\n";
+    for (size_t i = 0; i < names.size(); ++i) {
+        std::cout << names[i];
+        for (size_t j = 0; j < names.size(); ++j) {
+            std::cout << " " << matrix[i][j];
         }
-        cout << endl;
+        std::cout << "\n";
     }
-    return distance_matrix;
 }
 
 int main(int argc, char* argv[]){
     // performance with large I/O
     std::ios_base::sync_with_stdio(false);
     std::cin.tie(nullptr);
-
     if(argc < 2){
         printUsage(argv[0]);
         return 1;
     }
-    vector<vector<double>> distance_matrix;
     if(const string command = argv[1]; command == "--create-sketch"){
         if (argc < 3) {
             cerr << "Error: --create-sketch requires exactly one output file name.\n";
@@ -204,15 +203,22 @@ int main(int argc, char* argv[]){
             return 1;
         }
         vector<string> files;
-        for(int i = 2; i < argc; ++i){
+        for(int i = 2; i < argc; i++){
             files.emplace_back(argv[i]);
         }
-        distance_matrix = computeDistance(files);
+        auto [names, matrix] = computeDistance(files);
+        std::cout << "--- Phylip Distance Matrix ---\n";
+        printDistanceMatrix(names, matrix);
+        std::cout << "\n--- UPGMA Tree (Newick Format) ---\n";
+        const std::string upgma_tree = buildUPGMATree(names, matrix);
+        std::cout << upgma_tree << std::endl;
+        std::cout << "\n--- Neighbor-Joining Tree (Newick Format) ---\n";
+        const std::string nj_tree = buildNJTree(names, matrix);
+        std::cout << nj_tree << std::endl;
     }else{
         cerr << "Error: Unknown command '" << command << "'.\n";
         printUsage(argv[0]);
         return 1;
     }
     return 0;
-
 }
