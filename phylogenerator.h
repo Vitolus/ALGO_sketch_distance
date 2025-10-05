@@ -2,199 +2,216 @@
 #define ALGO_SKETCH_DISTANCE_PHYLOGENERATOR_H
 
 #include <iostream>
-#include <vector>
-#include <string>
-#include <map>
 #include <limits>
-#include <numeric>
 #include <memory>
+#include <numeric>
+#include <string>
+#include <vector>
 
 using std::vector;
 using std::string;
 using std::cout;
 using std::endl;
 using std::make_shared;
-using std::shared_ptr;
+using std::unique_ptr;
 
 /**
  * @brief a simple struct to represent a node in the phylogenetic tree
  */
 struct Node{
-    string name;
-    double branchLength{};
-    shared_ptr<Node> left;
-    shared_ptr<Node> right;
+    // using unique_ptr for automatic memory management of the tree. When a Node is destroyed, it automatically
+    // destroys its children
+    std::unique_ptr<Node> left = nullptr;
+    std::unique_ptr<Node> right = nullptr;
+    std::string name; // name of the sequence (for leaves)
+    double branch_length = 0.0; // distance to parent
+    int id = 0; // unique identifier for the node
+    int cluster_size = 1; // for UPGMA: number of leaves in this cluster
+    static inline int next_id = 0; // ensure each node gets a unique ID
+
+    explicit Node(std::string n = "") : name(std::move(n)), id(next_id++){}
+    [[nodiscard]] bool is_leaf() const{
+        return left == nullptr && right == nullptr;
+    }
 };
 
-using DistanceMatrix = vector<vector<double>>;
-using NodePtr = shared_ptr<Node>;
+/**
+ * @brief convert a tree to Newick format
+ */
+inline void toNewickRecursive(const Node* node, std::string& newick_string){
+    if(!node) return;
+    if(node->is_leaf()){
+        newick_string += node->name + ":" + std::to_string(node->branch_length);
+    }else{
+        newick_string += "(";
+        toNewickRecursive(node->left.get(), newick_string);
+        newick_string += ",";
+        toNewickRecursive(node->right.get(), newick_string);
+        newick_string += ")";
+        // the root node in many Newick formats doesn't have a branch length
+        if(node->branch_length > 0.0){
+            newick_string += ":" + std::to_string(node->branch_length);
+        }
+    }
+}
+inline std::string toNewick(const Node* root){
+    std::string newick_string = "";
+    toNewickRecursive(root, newick_string);
+    newick_string += ";";
+    return newick_string;
+}
 
 /**
  * @brief perform UPGMA clustering
  */
-inline NodePtr upgma(const DistanceMatrix& distMatrix, const vector<string>& labels){
-    if(distMatrix.empty()){
-        return nullptr;
+inline std::string buildUPGMATree(const std::vector<std::string>& names, const std::vector<std::vector<double>>& matrix){
+    if(names.empty()) return ";";
+    // initialize active clusters: one for each leaf node
+    std::vector<std::unique_ptr<Node>> clusters;
+    clusters.reserve(names.size());
+    for(const auto& name : names){
+        clusters.push_back(std::make_unique<Node>(name));
     }
-    const size_t n = labels.size();
-    vector<NodePtr> nodes;
-    std::map<string, int> labelToIndex;
-    for(auto i = 0; i < n; ++i){
-        nodes.push_back(make_shared<Node>());
-        nodes.back()->name = labels[i];
-        nodes.back()->branchLength = 0.0;
-        labelToIndex[labels[i]] = i;
-    }
-    DistanceMatrix currentDistances = distMatrix;
-    vector<int> clusterSizes(n, 1);
-    vector<bool> activeClusters(n, true);
-    while(nodes.size() > 1){
-        double minDistance = std::numeric_limits<double>::max();
-        int i_min = -1, j_min = -1;
-        // Find the two closest clusters
-        for(int i = 0; i < n; ++i){
-            if(!activeClusters[i]) continue;
-            for(int j = i + 1; j < n; ++j){
-                if(!activeClusters[j]) continue;
-                if(currentDistances[i][j] < minDistance){
-                    minDistance = currentDistances[i][j];
-                    i_min = i;
-                    j_min = j;
+    auto current_matrix = matrix;
+    while (clusters.size() > 1) {
+        // find the pair of clusters (i, j) with the minimum distance
+        double min_dist = std::numeric_limits<double>::max();
+        int min_i = -1;
+        int min_j = -1;
+        for(size_t i = 0; i < current_matrix.size(); i++){
+            for(size_t j = i + 1; j < current_matrix.size(); j++){
+                if(current_matrix[i][j] < min_dist){
+                    min_dist = current_matrix[i][j];
+                    min_i = static_cast<int>(i);
+                    min_j = static_cast<int>(j);
                 }
             }
         }
-        // create a new internal node
-        const auto newNode = make_shared<Node>();
-        newNode->left = nodes[i_min];
-        newNode->right = nodes[j_min];
-        newNode->name = "(" + nodes[i_min]->name + "," + nodes[j_min]->name + ")";
-        // calculate branch lengths for the new branches
-        newNode->left->branchLength = minDistance / 2.0 - nodes[i_min]->branchLength;
-        newNode->right->branchLength = minDistance / 2.0 - nodes[j_min]->branchLength;
-        // update distances
-        for(int k = 0; k < n; ++k){
-            if(!activeClusters[k] || k == i_min || k == j_min){
-                continue;
+        // create a new parent node for clusters i and j
+        auto new_node = std::make_unique<Node>();
+        // branch lengths are half the distance between the clusters
+        clusters[min_i]->branch_length = min_dist / 2.0;
+        clusters[min_j]->branch_length = min_dist / 2.0;
+        // transfer ownership of the child nodes to the new parent node
+        new_node->left = std::move(clusters[min_i]);
+        new_node->right = std::move(clusters[min_j]);
+        new_node->cluster_size = new_node->left->cluster_size + new_node->right->cluster_size;
+        // update the distance matrix
+        std::vector<double> new_distances;
+        for(size_t k = 0; k < clusters.size(); k++){
+            if(k == min_i || k == min_j) continue;
+            // weighted average distance for the new cluster
+            double dist = (current_matrix[min_i][k] * new_node->left->cluster_size +
+                           current_matrix[min_j][k] * new_node->right->cluster_size) /
+                          (new_node->left->cluster_size + new_node->right->cluster_size);
+            new_distances.push_back(dist);
+        }
+        // create the next smaller matrix
+        std::vector<std::vector<double>> next_matrix(current_matrix.size() - 1,
+            std::vector<double>(current_matrix.size() - 1));
+        int r_new = 1;
+        int c_new = 1;
+        for(size_t r = 0; r < current_matrix.size(); r++){
+            if(r == min_i || r == min_j) continue;
+            c_new = r_new + 1;
+            for(size_t c = r + 1; c < current_matrix.size(); c++){
+                if(c == min_i || c == min_j) continue;
+                next_matrix[r_new][c_new] = next_matrix[c_new][r_new] = current_matrix[r][c];
+                c_new++;
             }
-            const double newDist = (currentDistances[i_min][k] * clusterSizes[i_min] +
-                currentDistances[j_min][k] * clusterSizes[j_min]) / (clusterSizes[i_min] + clusterSizes[j_min]);
-            currentDistances[i_min][k] = currentDistances[k][i_min] = newDist;
+            r_new++;
         }
-        // deactivate merged clusters and update `nodes`
-        activeClusters[j_min] = false;
-        clusterSizes[i_min] += clusterSizes[j_min];
-        nodes[i_min] = newNode;
-        // this is a simplification. A more robust implementation would manage indices better.
-        // we simply treat j_min's slot as deactivated.
-    }
-    // the last remaining active node is the root
-    for(int i = 0; i < n; ++i){
-        if(activeClusters[i]){
-            return nodes[i];
+        for(size_t k = 0; k < new_distances.size(); k++){
+             next_matrix[0][k+1] = next_matrix[k+1][0] = new_distances[k];
         }
+        current_matrix = next_matrix;
+        // update the list of active clusters. Replace the first merged cluster with the new node
+        clusters[min_i] = std::move(new_node);
+        // remove the second merged cluster
+        clusters.erase(clusters.begin() + min_j);
     }
-    return nullptr;
+    return toNewick(clusters[0].get());
 }
 
 /**
  * @brief perform Neighbor-Joining
  */
-inline NodePtr neighborJoining(const DistanceMatrix& distMatrix, const vector<string>& labels){
-    if(distMatrix.empty()){
-        return nullptr;
+inline std::string buildNJTree(const std::vector<std::string>& names, const std::vector<std::vector<double>>& matrix){
+    if(names.empty()) return ";";
+    std::vector<std::unique_ptr<Node>> clusters;
+    clusters.reserve(names.size());
+    for(const auto& name : names){
+        clusters.push_back(std::make_unique<Node>(name));
     }
-    const size_t n = labels.size();
-    vector<NodePtr> nodes;
-    for(int i = 0; i < n; ++i){
-        nodes.push_back(make_shared<Node>());
-        nodes.back()->name = labels[i];
-    }
-    const DistanceMatrix& currentDistances = distMatrix;
-    vector<int> activeIndices(n);
-    iota(activeIndices.begin(), activeIndices.end(), 0);
-    while(activeIndices.size() > 2){
-        const size_t currentN = activeIndices.size();
-        // calculate Q-matrix
-        DistanceMatrix Q(currentN, vector<double>(currentN, 0.0));
-        vector<double> r(currentN, 0.0);
-        for(int i = 0; i < currentN; ++i){
-            for(int j = 0; j < currentN; ++j){
-                if(i != j){
-                    r[i] += currentDistances[activeIndices[i]][activeIndices[j]];
+    auto current_matrix = matrix;
+    std::vector<int> active_indices(names.size());
+    std::iota(active_indices.begin(), active_indices.end(), 0); // Fills with 0, 1, 2, ...
+    while(clusters.size() > 2){
+        const auto n = static_cast<int>(clusters.size());
+        // calculate the 'u' values (net divergence) for each cluster
+        std::vector<double> u(n, 0.0);
+        for(int i = 0; i < n; i++){
+            for(int j = 0; j < n; j++){
+                if(i != j) u[i] += current_matrix[i][j];
+            }
+        }
+        // find the pair (i, j) that minimizes the Q-criterion
+        double min_q = std::numeric_limits<double>::max();
+        int min_i = -1;
+        int min_j = -1;
+        for(int i = 0; i < n; i++){
+            for(int j = i + 1; j < n; j++){
+                if(const double q = (n - 2) * current_matrix[i][j] - u[i] - u[j]; q < min_q){
+                    min_q = q;
+                    min_i = i;
+                    min_j = j;
                 }
             }
         }
-        double minQ = std::numeric_limits<double>::max();
-        int i_min = -1, j_min = -1;
-        for(int i = 0; i < currentN; ++i){
-            for(int j = i + 1; j < currentN; ++j){
-                Q[i][j] = currentDistances[activeIndices[i]][activeIndices[j]] - (r[i] + r[j]) /
-                    (static_cast<double>(currentN) - 2.0);
-                if(Q[i][j] < minQ){
-                    minQ = Q[i][j];
-                    i_min = i;
-                    j_min = j;
-                }
-            }
+        // create a new parent node
+        auto new_node = std::make_unique<Node>();
+        const double dist_ij = current_matrix[min_i][min_j];
+        // 4. Calculate branch lengths from the new node to i and j
+        clusters[min_i]->branch_length = (dist_ij / 2.0) + (u[min_i] - u[min_j]) / (2.0 * (n - 2));
+        clusters[min_j]->branch_length = dist_ij - clusters[min_i]->branch_length;
+        new_node->left = std::move(clusters[min_i]);
+        new_node->right = std::move(clusters[min_j]);
+        // update the distance matrix
+        std::vector<double> new_distances;
+        for(int k = 0; k < n; k++){
+            if(k == min_i || k == min_j) continue;
+            double dist = (current_matrix[min_i][k] + current_matrix[min_j][k] - dist_ij) / 2.0;
+            new_distances.push_back(dist);
         }
-        // create a new internal node
-        auto newNode = make_shared<Node>();
-        newNode->left = nodes[i_min];
-        newNode->right = nodes[j_min];
-        // calculate branch lengths
-        const double branch_i = (currentDistances[activeIndices[i_min]][activeIndices[j_min]] + (r[i_min] - r[j_min]) /
-            (static_cast<double>(currentN) - 2.0)) / 2.0;
-        const double branch_j = currentDistances[activeIndices[i_min]][activeIndices[j_min]] - branch_i;
-        newNode->left->branchLength = branch_i;
-        newNode->right->branchLength = branch_j;
-        // update distances for the new node
-        vector<double> newDists(currentN);
-        for(int k = 0; k < currentN; ++k){
-            if(k != i_min && k != j_min){
-                newDists[k] = (currentDistances[activeIndices[i_min]][activeIndices[k]] +
-                    currentDistances[activeIndices[j_min]][activeIndices[k]] -
-                    currentDistances[activeIndices[i_min]][activeIndices[j_min]]) / 2.0;
+        std::vector<std::vector<double>> next_matrix(n - 1, std::vector<double>(n - 1));
+        int r_new = 1;
+        for(int r = 0; r < n; r++){
+            if(r == min_i || r == min_j) continue;
+            int c_new = r_new + 1;
+            for(int c = r + 1; c < n; c++){
+                if(c == min_i || c == min_j) continue;
+                next_matrix[r_new][c_new] = next_matrix[c_new][r_new] = current_matrix[r][c];
+                c_new++;
             }
+            r_new++;
         }
-        // update active indices and nodes
-        int old_i = activeIndices[i_min], old_j = activeIndices[j_min];
-        // remove j_min
-        activeIndices.erase(activeIndices.begin() + j_min);
-        nodes.erase(nodes.begin() + j_min);
-        // remove i_min (since j_min was removed, i_min's index might have shifted)
-        activeIndices.erase(activeIndices.begin() + i_min);
-        nodes.erase(nodes.begin() + i_min);
-        // add a new node to the end
-        activeIndices.push_back(old_i);
-        nodes.push_back(newNode);
-        // a full implementation would update the distance matrix with the new node's distances, managing the shrinking
-        // distance matrix. The above code is a conceptual simplification.
+        for(size_t k = 0; k < new_distances.size(); ++k){
+             next_matrix[0][k+1] = next_matrix[k+1][0] = new_distances[k];
+        }
+        current_matrix = next_matrix;
+        // update cluster list
+        clusters[min_i] = std::move(new_node);
+        clusters.erase(clusters.begin() + min_j);
     }
-    // Connect the last two nodes
-    auto root = make_shared<Node>();
-    root->left = nodes[0];
-    root->right = nodes[1];
-    root->left->branchLength = currentDistances[activeIndices[0]][activeIndices[1]] / 2.0;
-    root->right->branchLength = currentDistances[activeIndices[0]][activeIndices[1]] / 2.0;
-    return root;
-}
-
-inline void displayTree(const NodePtr& node, const string& prefix = "", const bool isLeft = false){
-    if(node == nullptr){
-        return;
+    // join the last two clusters
+    if(clusters.size() == 2){
+        clusters[0]->branch_length = clusters[1]->branch_length = current_matrix[0][1] / 2.0;
+        const auto root = std::make_unique<Node>();
+        root->left = std::move(clusters[0]);
+        root->right = std::move(clusters[1]);
+        return toNewick(root.get());
     }
-    cout << prefix;
-    cout << (isLeft ? "|-- " : "`-- ");
-    if(node->left == nullptr && node->right == nullptr){
-        // This is a leaf node
-        cout << node->name << " (Length: " << node->branchLength << ")" << endl;
-    }else{
-        // This is an internal node
-        cout << "---" << " (Length: " << node->branchLength << ")" << endl;
-        // Recursively call for children
-        displayTree(node->right, prefix + (isLeft ? "|   " : "    "), false);
-        displayTree(node->left, prefix + (isLeft ? "|   " : "    "), true);
-    }
+    return toNewick(clusters[0].get());
 }
 
 #endif //ALGO_SKETCH_DISTANCE_PHYLOGENERATOR_H
