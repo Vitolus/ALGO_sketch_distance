@@ -129,6 +129,29 @@ void printDistanceMatrix(const std::vector<std::string>& names, const std::vecto
     }
 }
 
+void unitTest(){
+    // create two small sketches from hardcoded sequences
+    FracMinHash sketch1(0.1, 3);
+    std::string seq1 = "CTACTACGCCGATTCTGCTG";
+    for(char c : seq1) sketch1.add_char(c);
+    FracMinHash sketch2(0.1, 3);
+    std::string seq2 = "CTACTACGCCAATTCTGCTG";
+    for(char c : seq2) sketch2.add_char(c);
+    FracMinHash sketch3(0.1, 3);
+    std::string seq3 = "ATACTACGCCGATTCTGCTG";
+    for(char c : seq3) sketch3.add_char(c);
+    // compute and print their distance
+    double dist12 = sketch1.distance(sketch2);
+    cout << "Distance between sketches: " << dist12 << endl;
+    cout << "True distance should be 0.4762\n\n";
+    double dist13 = sketch1.distance(sketch3);
+    cout << "Distance between sketches: " << dist13 << endl;
+    cout << "True distance should be 0.1176\n\n";
+    double dist23 = sketch2.distance(sketch3);
+    cout << "Distance between sketches: " << dist23 << endl;
+    cout << "True distance should be 0.5455\n\n";
+}
+
 int main(int argc, char* argv[]){
     // performance with large I/O
     std::ios_base::sync_with_stdio(false);
@@ -224,6 +247,8 @@ int main(int argc, char* argv[]){
         cout << "\n--- Neighbor-Joining Tree (Newick Format) ---\n";
         const std::string nj_tree = buildNJTree(names, matrix);
         cout << nj_tree << std::endl;
+    }else if(command == "--test"){
+        unitTest();
     }else{
         cerr << "Error: Unknown command '" << command << "'.\n";
         printUsage(argv[0]);
