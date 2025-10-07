@@ -112,9 +112,6 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
 double FracMinHash::distance(const FracMinHash &other) const{
     double jac = jaccard(other);
     jac = std::max(0.0, std::min(1.0, jac)); // clamp to [0,1]
-
-    std::cout << "True Jaccard: " << jac << std::endl;
-
     return 1.0 - jac;
 }
 

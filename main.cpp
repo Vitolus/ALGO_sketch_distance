@@ -131,13 +131,13 @@ void printDistanceMatrix(const std::vector<std::string>& names, const std::vecto
 
 void unitTest(){
     // create two small sketches from hardcoded sequences
-    FracMinHash sketch1(0.1, 3);
+    FracMinHash sketch1(0.1, 5);
     std::string seq1 = "CTACTACGCCGATTCTGCTG";
     for(char c : seq1) sketch1.add_char(c);
-    FracMinHash sketch2(0.1, 3);
+    FracMinHash sketch2(0.1, 5);
     std::string seq2 = "CTACTACGCCAATTCTGCTG";
     for(char c : seq2) sketch2.add_char(c);
-    FracMinHash sketch3(0.1, 3);
+    FracMinHash sketch3(0.1, 5);
     std::string seq3 = "ATACTACGCCGATTCTGCTG";
     for(char c : seq3) sketch3.add_char(c);
     // compute and print their distance
