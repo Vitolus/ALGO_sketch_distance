@@ -1,4 +1,5 @@
 #include "FracMinHash.h"
+#include <cmath>
 
 FracMinHash::FracMinHash(const double scale, const unsigned k, const uint64_t seed)
     : k_(k), scale_(scale), seed_(seed), fw_hash_(0), rc_hash_(0), filled_(0){
@@ -78,26 +79,36 @@ size_t FracMinHash::sketch_size() const{
     for(auto h : other.sketch_) sketch_.insert(h);
 } */
 
-double FracMinHash::jaccard(const FracMinHash &other) const{
+std::pair<double, double> FracMinHash::jaccardWithUnion(const FracMinHash &other) const{
     if(k_ != other.k_) throw std::invalid_argument("k mismatch in jaccard");
     if(scale_ != other.scale_) throw std::invalid_argument("scale mismatch in jaccard");
     if(seed_ != other.seed_) throw std::invalid_argument("seed mismatch in jaccard");
-    if(sketch_.empty() && other.sketch_.empty()) return 1.0; // both empty -> identical
-    if(sketch_.empty() || other.sketch_.empty()) return 0.0; // one empty -> disjoint
+    if(sketch_.empty() && other.sketch_.empty()) return {1.0, 1.0}; // both empty -> identical
+    if(sketch_.empty() || other.sketch_.empty()) return {0.0, 0.0}; // one empty -> disjoint
     // compute intersection size
     const std::unordered_set<uint64_t> *small = &sketch_;
     const std::unordered_set<uint64_t> *big = &other.sketch_;
     if(small->size() > big->size()) std::swap(small, big);
     size_t inter = 0;
     for(auto h : *small) if(big->find(h) != big->end()) ++inter; // count intersection
-    const size_t uni = sketch_.size() + other.sketch_.size() - inter; // union size
-    return (uni == 0) ? 0.0 : static_cast<double>(inter) / static_cast<double>(uni); // Jaccard index
+    size_t uni = sketch_.size() + other.sketch_.size() - inter; // union size
+    uni = static_cast<double>(uni);
+    double jac = (uni == 0.0) ? 0.0 : static_cast<double>(inter) / uni; // jaccard index
+    return std::pair<double, double>{jac, uni};
+}
+
+double FracMinHash::jaccardEstimator(const double true_jaccard, const size_t union_size) const{
+    if(!(true_jaccard >= 0.0 && true_jaccard <= 1.0)) throw std::invalid_argument("jaccard index must be in [0,1]");
+    if(scale_ <= 0.0 || scale_ > 1.0) throw std::invalid_argument("scale must be in (0,1]");
+    // unbiased estimator: E[hat{J}] = J / (1 - (1 - s)^union_size)
+    double denom = 1.0 - std::pow(1.0 - scale_, union_size);
+    return (denom == 0.0) ? 0.0 : true_jaccard / denom;
 }
 
 double FracMinHash::distance(const FracMinHash &other) const{
-    double jac = jaccard(other);
+    auto  [jac, uni] = jaccardWithUnion(other);
     jac = std::max(0.0, std::min(1.0, jac)); // clamp to [0,1]
-    return 1.0 - jac;
+    return 1.0 - jaccardEstimator(jac, uni);
 }
 
 void FracMinHash::save(const std::string &filename) const{

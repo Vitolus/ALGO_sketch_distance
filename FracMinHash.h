@@ -32,7 +32,12 @@ public:
     /**
      * @brief estimate Jaccard assuming same scale; returns value in [0,1]
      */
-    double jaccard(const FracMinHash &other) const;
+    std::pair<double, double> jaccardWithUnion(const FracMinHash &other) const;
+
+    /**
+     * @brief produce unbiased jaccard similarity estimator
+     */
+    double jaccardEstimator(const double true_jaccard, const size_t union_size) const;
 
     /**
      * @brief distance = 1 - Jaccard
