@@ -27,7 +27,7 @@ public:
     /**
      * @brief merge: sketches must use the same scale and k
      */
-    void merge(const FracMinHash &other);
+    // void merge(const FracMinHash &other);
 
     /**
      * @brief estimate Jaccard assuming same scale; returns value in [0,1]

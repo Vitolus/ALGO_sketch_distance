@@ -70,20 +70,20 @@ size_t FracMinHash::sketch_size() const{
     return sketch_.size();
 }
 
-void FracMinHash::merge(const FracMinHash &other){
+/* void FracMinHash::merge(const FracMinHash &other){
     if(k_ != other.k_) throw std::invalid_argument("k mismatch in merge");
     if(scale_ != other.scale_) throw std::invalid_argument("scale mismatch in merge");
     if(seed_ != other.seed_) throw std::invalid_argument("seed mismatch in merge");
     // union of sets
     for(auto h : other.sketch_) sketch_.insert(h);
-}
+} */
 
 double FracMinHash::jaccard(const FracMinHash &other) const{
     if(k_ != other.k_) throw std::invalid_argument("k mismatch in jaccard");
     if(scale_ != other.scale_) throw std::invalid_argument("scale mismatch in jaccard");
     if(seed_ != other.seed_) throw std::invalid_argument("seed mismatch in jaccard");
-    if(sketch_.empty() && other.sketch_.empty()) return 1.0;
-    if(sketch_.empty() || other.sketch_.empty()) return 0.0;
+    if(sketch_.empty() && other.sketch_.empty()) return 1.0; // both empty -> identical
+    if(sketch_.empty() || other.sketch_.empty()) return 0.0; // one empty -> disjoint
     // compute intersection size
     const std::unordered_set<uint64_t> *small = &sketch_;
     const std::unordered_set<uint64_t> *big = &other.sketch_;
@@ -95,10 +95,9 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
 }
 
 double FracMinHash::distance(const FracMinHash &other) const{
-    double j = jaccard(other);
-    if(j < 0.0) j = 0.0;
-    if(j > 1.0) j = 1.0;
-    return 1.0 - j;
+    double jac = jaccard(other);
+    jac = std::max(0.0, std::min(1.0, jac)); // clamp to [0,1]
+    return 1.0 - jac;
 }
 
 void FracMinHash::save(const std::string &filename) const{

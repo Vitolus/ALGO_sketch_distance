@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <complex>
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -195,7 +196,11 @@ int main(int argc, char* argv[]){
             printUsage(argv[0]);
             return 1;
         }
+        auto start_time = std::chrono::high_resolution_clock::now();
         createSketch(output_file, k, scale, seed);
+        auto end_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end_time - start_time;
+        cout << "Total time: " << elapsed.count() << "s\n";
     }else if(command == "--distance"){
         if(argc < 4){
             cerr << "Error: --distance requires at least two sketch files.\n";
@@ -206,15 +211,19 @@ int main(int argc, char* argv[]){
         for(int i = 2; i < argc; i++){
             files.emplace_back(argv[i]);
         }
+        auto start_time = std::chrono::high_resolution_clock::now();
         auto [names, matrix] = computeDistance(files);
-        std::cout << "--- Phylip Distance Matrix ---\n";
+        auto end_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end_time - start_time;
+        cout << "Distance matrix computed in " << elapsed.count() << "s\n";
+        cout << "--- Phylip Distance Matrix ---\n";
         printDistanceMatrix(names, matrix);
-        std::cout << "\n--- UPGMA Tree (Newick Format) ---\n";
+        cout << "\n--- UPGMA Tree (Newick Format) ---\n";
         const std::string upgma_tree = buildUPGMATree(names, matrix);
-        std::cout << upgma_tree << std::endl;
-        std::cout << "\n--- Neighbor-Joining Tree (Newick Format) ---\n";
+        cout << upgma_tree << std::endl;
+        cout << "\n--- Neighbor-Joining Tree (Newick Format) ---\n";
         const std::string nj_tree = buildNJTree(names, matrix);
-        std::cout << nj_tree << std::endl;
+        cout << nj_tree << std::endl;
     }else{
         cerr << "Error: Unknown command '" << command << "'.\n";
         printUsage(argv[0]);
