@@ -130,26 +130,38 @@ void printDistanceMatrix(const std::vector<std::string>& names, const std::vecto
 }
 
 void unitTest(){
-    // create two small sketches from hardcoded sequences
+    // create three small sketches from hardcoded sequences
+    cout << "--- Running Unit Test ---\n";
     FracMinHash sketch1(0.1, 5);
-    std::string seq1 = "CTACTACGCCGATTCTGCTG";
-    for(char c : seq1) sketch1.add_char(c);
+    std::string seq1_str = "CTACTACGCCGATTCTGCTG";
+    for(char c : seq1_str) sketch1.add_char(c);
     FracMinHash sketch2(0.1, 5);
-    std::string seq2 = "CTACTACGCCAATTCTGCTG";
-    for(char c : seq2) sketch2.add_char(c);
+    std::string seq2_str = "CTACTACGCCAATTCTGCTG";
+    for(char c : seq2_str) sketch2.add_char(c);
     FracMinHash sketch3(0.1, 5);
-    std::string seq3 = "ATACTACGCCGATTCTGCTG";
-    for(char c : seq3) sketch3.add_char(c);
-    // compute and print their distance
-    double dist12 = sketch1.distance(sketch2);
-    cout << "Distance between sketches: " << dist12 << endl;
-    cout << "True distance should be 0.4762\n\n";
-    double dist13 = sketch1.distance(sketch3);
-    cout << "Distance between sketches: " << dist13 << endl;
-    cout << "True distance should be 0.1176\n\n";
-    double dist23 = sketch2.distance(sketch3);
-    cout << "Distance between sketches: " << dist23 << endl;
-    cout << "True distance should be 0.5455\n\n";
+    std::string seq3_str = "ATACTACGCCGATTCTGCTG";
+    for(char c : seq3_str) sketch3.add_char(c);
+    // compute distances
+    const double dist12 = sketch1.distance(sketch2);
+    const double dist13 = sketch1.distance(sketch3);
+    const double dist23 = sketch2.distance(sketch3);
+    cout << "Distance seq1-seq2: " << dist12 << " (Expected ~0.4762)\n";
+    cout << "Distance seq1-seq3: " << dist13 << " (Expected ~0.1176)\n";
+    cout << "Distance seq2-seq3: " << dist23 << " (Expected ~0.5455)\n\n";
+    // prepare data for tree building
+    std::vector<std::string> names = {"seq1", "seq2", "seq3"};
+    std::vector<std::vector<double>> matrix = {
+        {0.0, dist12, dist13},
+        {dist12, 0.0, dist23},
+        {dist13, dist23, 0.0}
+    };
+    cout << "--- Phylip Distance Matrix ---\n";
+    printDistanceMatrix(names, matrix);
+    cout << "\n--- UPGMA Tree (Newick Format) ---\n";
+    buildUPGMATree(names, matrix);
+    cout << "\n--- Neighbor-Joining Tree (Newick Format) ---\n";
+    buildNJTree(names, matrix);
+    cout << "--- Unit Test Finished ---\n";
 }
 
 int main(int argc, char* argv[]){
@@ -242,11 +254,9 @@ int main(int argc, char* argv[]){
         cout << "--- Phylip Distance Matrix ---\n";
         printDistanceMatrix(names, matrix);
         cout << "\n--- UPGMA Tree (Newick Format) ---\n";
-        const std::string upgma_tree = buildUPGMATree(names, matrix);
-        cout << upgma_tree << std::endl;
+        buildUPGMATree(names, matrix);
         cout << "\n--- Neighbor-Joining Tree (Newick Format) ---\n";
-        const std::string nj_tree = buildNJTree(names, matrix);
-        cout << nj_tree << std::endl;
+        buildNJTree(names, matrix);
     }else if(command == "--test"){
         unitTest();
     }else{

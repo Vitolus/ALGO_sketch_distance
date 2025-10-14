@@ -37,6 +37,44 @@ struct Node{
 
 // TODO: build also graphic view of the tree
 /**
+ * @brief a helper function to print the tree structure to the console
+ */
+inline void printTreeRecursive(const Node* node, const std::string& prefix, bool is_left){
+    if(!node) return;
+
+    cout << prefix;
+    cout << (is_left ? "├──" : "└──" );
+
+    // print the value of the node
+    if (node->is_leaf()) {
+        cout << node->name << " [branch_length:" << node->branch_length << "]" << endl;
+    } else {
+        cout << "Node " << node->id << " [branch_length:" << node->branch_length << "]" << endl;
+    }
+
+    // enter the next level of the tree
+    // the right child is printed first to get a more natural tree layout in the console
+    printTreeRecursive(node->right.get(), prefix + (is_left ? "│   " : "    "), false);
+    printTreeRecursive(node->left.get(), prefix + (is_left ? "│   " : "    "), true);
+}
+
+/**
+ * @brief visualize the tree in a text-based format
+ */
+inline void printTree(const Node* root){
+    if(!root) return;
+    cout << "\n--- Tree Visualization ---" << endl;
+    if (root->is_leaf()) {
+        cout << root->name << endl;
+    } else {
+        cout << "Root" << endl;
+    }
+    printTreeRecursive(root->right.get(), "", false);
+    printTreeRecursive(root->left.get(), "", true);
+    cout << "------------------------\n" << endl;
+}
+
+/**
  * @brief convert a tree to Newick format
  */
 inline void toNewickRecursive(const Node* node, std::string& newick_string){
@@ -65,8 +103,8 @@ inline std::string toNewick(const Node* root){
 /**
  * @brief perform UPGMA clustering
  */
-inline std::string buildUPGMATree(const std::vector<std::string>& names, const std::vector<std::vector<double>>& matrix){
-    if(names.empty()) return ";";
+inline void buildUPGMATree(const std::vector<std::string>& names, const std::vector<std::vector<double>>& matrix){
+    if(names.empty()) return;
     // initialize active clusters: one for each leaf node
     std::vector<std::unique_ptr<Node>> clusters;
     clusters.reserve(names.size());
@@ -131,14 +169,15 @@ inline std::string buildUPGMATree(const std::vector<std::string>& names, const s
         // remove the second merged cluster
         clusters.erase(clusters.begin() + min_j);
     }
-    return toNewick(clusters[0].get());
+    cout << toNewick(clusters[0].get()) << endl;
+    printTree(clusters[0].get());
 }
 
 /**
  * @brief perform Neighbor-Joining
  */
-inline std::string buildNJTree(const std::vector<std::string>& names, const std::vector<std::vector<double>>& matrix){
-    if(names.empty()) return ";";
+inline void buildNJTree(const std::vector<std::string>& names, const std::vector<std::vector<double>>& matrix){
+    if(names.empty()) return;
     std::vector<std::unique_ptr<Node>> clusters;
     clusters.reserve(names.size());
     for(const auto& name : names){
@@ -210,9 +249,11 @@ inline std::string buildNJTree(const std::vector<std::string>& names, const std:
         const auto root = std::make_unique<Node>();
         root->left = std::move(clusters[0]);
         root->right = std::move(clusters[1]);
-        return toNewick(root.get());
+        cout << toNewick(root.get()) << endl;
+        printTree(root.get());
     }
-    return toNewick(clusters[0].get());
+    cout << toNewick(clusters[0].get()) << endl;
+    printTree(clusters[0].get());
 }
 
 #endif //ALGO_SKETCH_DISTANCE_PHYLOGENERATOR_H
