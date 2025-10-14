@@ -244,7 +244,6 @@ int main(int argc, char* argv[]){
             printUsage(argv[0]);
             return 1;
         }
-
         // Determine final k value based on user input
         if (k > 0) { // --k was provided, it takes precedence
             if (d_max > 0.0) {
@@ -262,10 +261,8 @@ int main(int argc, char* argv[]){
         } else { // Neither was provided, use default k
             k = 21;
         }
-
         // Clamp k to the valid range [1, 31] supported by FracMinHash
         k = std::max(1u, std::min(31u, k));
-
         auto start_time = std::chrono::high_resolution_clock::now();
         createSketch(output_file, k, scale, seed);
         auto end_time = std::chrono::high_resolution_clock::now();

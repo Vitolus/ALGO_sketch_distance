@@ -71,7 +71,7 @@ inline void printTree(const Node* root){
     }
     printTreeRecursive(root->right.get(), "", false);
     printTreeRecursive(root->left.get(), "", true);
-    cout << "------------------------\n" << endl;
+    cout << "------------------------\n";
 }
 
 /**
@@ -246,14 +246,18 @@ inline void buildNJTree(const std::vector<std::string>& names, const std::vector
     // join the last two clusters
     if(clusters.size() == 2){
         clusters[0]->branch_length = clusters[1]->branch_length = current_matrix[0][1] / 2.0;
-        const auto root = std::make_unique<Node>();
+        auto root = std::make_unique<Node>();
         root->left = std::move(clusters[0]);
         root->right = std::move(clusters[1]);
         cout << toNewick(root.get()) << endl;
         printTree(root.get());
+        return; // Exit after processing the final tree
     }
-    cout << toNewick(clusters[0].get()) << endl;
-    printTree(clusters[0].get());
+    // Handle cases with 0 or 1 initial items, or if the loop finishes with one cluster
+    if(!clusters.empty()){
+        cout << toNewick(clusters[0].get()) << endl;
+        printTree(clusters[0].get());
+    }
 }
 
 #endif //ALGO_SKETCH_DISTANCE_PHYLOGENERATOR_H
