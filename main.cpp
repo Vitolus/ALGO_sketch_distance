@@ -23,7 +23,8 @@ void printUsage(const std::string& program_name) {
               << "  --create-sketch  Creates a sketch from a genome sequence provided via stdin.\n"
               << "  --distance       Calculates and prints the distance matrix, UPGMA tree, and NJ tree.\n\n"
               << "Options for --create-sketch:\n"
-              << "  --k <int>        K-mer size (default: 21)\n"
+              << "  --k <int>        K-mer size. Overrides --d-max if both are provided. (default: 21)\n"
+              << "  --d-max <float>  Max evolutionary distance. Used to calculate k if --k is not set.\n"
               << "  --scale <float>  Scaling factor (default: 0.001)\n"
               << "  --seed <int>     Seed for hashing (default: 1469598103934665603)\n";
 }
@@ -178,7 +179,8 @@ int main(int argc, char* argv[]){
             printUsage(argv[0]);
             return 1;
         }
-        unsigned k = 21;
+        unsigned k = 0;
+        double d_max = 0.0;
         double scale = 0.001;
         uint64_t seed = 1469598103934665603ULL;
         string output_file;
@@ -193,6 +195,17 @@ int main(int argc, char* argv[]){
                     k = std::stoi(argv[++i]);
                 }catch(const std::exception& e){
                     cerr << "Error: --k argument must be an integer: " << e.what() << endl;
+                }
+            }else if(arg == "--d-max"){
+                if(i + 1 >= argc){
+                    cerr << "Error: --d-max requires a float argument.\n";
+                    printUsage(argv[0]);
+                    return 1;
+                }
+                try{
+                    d_max = std::stod(argv[++i]);
+                }catch(const std::exception& e){
+                    cerr << "Error: --d-max argument must be a float: " << e.what() << endl;
                 }
             }else if(arg == "--scale"){
                 if(i + 1 >= argc){
@@ -231,6 +244,28 @@ int main(int argc, char* argv[]){
             printUsage(argv[0]);
             return 1;
         }
+
+        // Determine final k value based on user input
+        if (k > 0) { // --k was provided, it takes precedence
+            if (d_max > 0.0) {
+                cerr << "Warning: Both --k and --d-max were provided. Using --k " << k << ".\n";
+            }
+        } else if (d_max > 0.0) { // --d-max was provided, but --k was not
+            if (d_max <= 0.0 || d_max >= 1.0) {
+                cerr << "Error: --d-max must be between 0.0 and 1.0 (exclusive).\n";
+                return 1;
+            }
+            // Calculate k using the formula k = log(P_chance) / log(1 - d_max)
+            const double p_chance = 0.01;
+            k = static_cast<unsigned>(std::round(std::log(p_chance) / std::log(1.0 - d_max)));
+            cerr << "Using automatically determined k=" << k << " from d_max=" << d_max << endl;
+        } else { // Neither was provided, use default k
+            k = 21;
+        }
+
+        // Clamp k to the valid range [1, 31] supported by FracMinHash
+        k = std::max(1u, std::min(31u, k));
+
         auto start_time = std::chrono::high_resolution_clock::now();
         createSketch(output_file, k, scale, seed);
         auto end_time = std::chrono::high_resolution_clock::now();
