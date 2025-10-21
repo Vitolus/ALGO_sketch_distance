@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # This script automates the process of building the project, generating sketches
-# for several species, calculating their distances, and running the unit test.
+# for several species
 
 # Exit immediately if a command exits with a non-zero status.
 set -e
@@ -13,21 +13,23 @@ echo "Build complete. Executable 'dist' created."
 echo ""
 echo ""
 
-echo "--- Creating genome sketches (first 1MB of each)... ---"
+echo "--- Creating genome sketches... ---"
+K=21
+SCALE=0.01
 echo "Creating sketch for Saccharomyces cerevisiae..."
-./script_stream.sh -s saccharomyces_cerevisiae -l 1000000 | ./dist --create-sketch --k 21 --scale 0.05 sc.sketch
+./script_stream.sh -s saccharomyces_cerevisiae -l 1000000 | ./dist --create-sketch --k $K --scale $SCALE sc.sketch
 echo ""
 echo "Creating sketch for Homo sapiens..."
-./script_stream.sh -s homo_sapiens -l 1000000 | ./dist --create-sketch --k 21 --scale 0.05 hs.sketch
+./script_stream.sh -s homo_sapiens -l 1000000 | ./dist --create-sketch --k $K --scale $SCALE hs.sketch
 echo ""
 echo "Creating sketch for Mus musculus..."
-./script_stream.sh -s mus_musculus -l 1000000 | ./dist --create-sketch --k 21 --scale 0.05 mm.sketch
+./script_stream.sh -s mus_musculus -l 1000000 | ./dist --create-sketch --k $K --scale $SCALE mm.sketch
 echo ""
 echo "Creating sketch for Loxodonta africana..."
-./script_stream.sh -s loxodonta_africana -l 1000000 | ./dist --create-sketch --k 21 --scale 0.05 la.sketch
+./script_stream.sh -s loxodonta_africana -l 1000000 | ./dist --create-sketch --k $K --scale $SCALE la.sketch
 echo ""
 echo "Creating sketch for Drosophila melanogaster..."
-./script_stream.sh -s drosophila_melanogaster -l 1000000 | ./dist --create-sketch --k 21 --scale 0.05 dm.sketch
+./script_stream.sh -s drosophila_melanogaster -l 1000000 | ./dist --create-sketch --k $K --scale $SCALE dm.sketch
 echo ""
 echo "--- All sketches created successfully. ---"
 echo ""
