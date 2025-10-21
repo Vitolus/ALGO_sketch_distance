@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <complex>
 #include <chrono>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -67,6 +68,7 @@ void createSketch(const string& output_file, const unsigned k, const double scal
     cerr << "   Processed " << base_count << " bases\n";
     cerr << "   Retained " << sketch.sketch_size() << " hashes in the sketch\n";
     cerr << "   Sketch saved successfully to " << output_file << endl;
+    cout << "Memory usage: " << (std::filesystem::file_size(output_file) / 1024) << " bytes\n";
 }
 
 /**
@@ -267,6 +269,7 @@ int main(int argc, char* argv[]){
         createSketch(output_file, k, scale, seed);
         auto end_time = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end_time - start_time;
+
         cout << "Total time: " << elapsed.count() << "s\n";
     }else if(command == "--distance"){
         if(argc < 4){
