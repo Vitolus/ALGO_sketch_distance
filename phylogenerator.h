@@ -47,9 +47,9 @@ inline void printTreeRecursive(const Node* node, const std::string& prefix, bool
 
     // print the value of the node
     if (node->is_leaf()) {
-        cout << node->name << " [branch_length:" << node->branch_length << "]" << endl;
+        cout << node->name << " [" << node->branch_length << "]\n";
     } else {
-        cout << "Node " << node->id << " [branch_length:" << node->branch_length << "]" << endl;
+        cout << "Node " << node->id << " [" << node->branch_length << "]\n";
     }
 
     // enter the next level of the tree

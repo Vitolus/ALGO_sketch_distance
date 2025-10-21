@@ -2,6 +2,7 @@
 #define ALGO_SKETCH_DISTANCE_FRACMINHASH_H
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <limits>
@@ -12,7 +13,7 @@
 class FracMinHash{
 public:
     // scale in (0,1]; k must be <= 31 (2 bits per base fit in 62 bits)
-    FracMinHash(double scale, unsigned k, uint64_t seed = 1469598103934665603ULL);
+    FracMinHash(const std::string &filename, double scale, unsigned k, uint64_t seed = 1469598103934665603ULL);
 
     /**
      * @brief add one base (ACGT); other characters reset the rolling window
@@ -46,6 +47,7 @@ public:
     static FracMinHash load(const std::string &filename);
 
 private:
+    std::string filename_;
     unsigned k_;
     double scale_;
     uint64_t seed_;

@@ -1,9 +1,8 @@
 #include "FracMinHash.h"
-#include <cmath>
 #include <iostream>
 
-FracMinHash::FracMinHash(const double scale, const unsigned k, const uint64_t seed)
-    : k_(k), scale_(scale), seed_(seed), fw_hash_(0), rc_hash_(0), filled_(0){
+FracMinHash::FracMinHash(const std::string& filename, const double scale, const unsigned k, const uint64_t seed)
+    : filename_(filename), k_(k), scale_(scale), seed_(seed), fw_hash_(0), rc_hash_(0), filled_(0){
     // require 2*k <= 62 to keep mask shifts safe with 1ULL << (2*k)
     if(k == 0 || k > 31) throw std::invalid_argument("k must be in 1..31");
     if(!(scale > 0.0 && scale <= 1.0)) throw std::invalid_argument("scale must be in (0,1]");
@@ -103,7 +102,8 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     size_t uni = sketch_.size() + other.sketch_.size() - inter; // union size
     uni = static_cast<double>(uni);
     double jac = (uni == 0.0) ? 0.0 : static_cast<double>(inter) / uni; // jaccard index
-    std::cout << "Intersection: " << inter << ", Union: " << uni << ", Jaccard: " << jac << std::endl;
+    std::cout << filename_<< "," << other.filename_ << "    Intersection: " << inter << ", Union: " << uni << ", Jaccard: " << jac 
+    << std::endl;
     return jac;
 }
 
@@ -149,7 +149,7 @@ FracMinHash FracMinHash::load(const std::string &filename){
     in.read(reinterpret_cast<char*>(&seed), sizeof(seed));
     uint64_t n;
     in.read(reinterpret_cast<char*>(&n), sizeof(n));
-    FracMinHash fm(scale_d, k8, seed);
+    FracMinHash fm(filename, scale_d, k8, seed);
     for(uint64_t i = 0; i < n; i++){
         uint64_t h;
         in.read(reinterpret_cast<char*>(&h), sizeof(h));

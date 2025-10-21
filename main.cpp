@@ -49,7 +49,7 @@ void createSketch(const string& output_file, const unsigned k, const double scal
     cerr << "Starting sketch creation from standard input...\n";
     cerr << "   Parameters: k=" << k << ", scale=" << scale << ", seed=" << seed << endl;
     cerr << "   Output will be saved to: " << output_file << endl;
-    FracMinHash sketch(scale, k, seed);
+    FracMinHash sketch(output_file, scale, k, seed);
     char current_base;
     unsigned long long base_count = 0;
     // reading one character at a time from stdin
@@ -135,13 +135,13 @@ void printDistanceMatrix(const std::vector<std::string>& names, const std::vecto
 void unitTest(){
     // create three small sketches from hardcoded sequences
     cout << "--- Running Unit Test ---\n";
-    FracMinHash sketch1(0.1, 5);
+    FracMinHash sketch1("01", 0.1, 5);
     std::string seq1_str = "CTACTACGCCGATTCTGCTG";
     for(char c : seq1_str) sketch1.add_char(c);
-    FracMinHash sketch2(0.1, 5);
+    FracMinHash sketch2("02", 0.1, 5);
     std::string seq2_str = "CTACTACGCCAATTCTGCTG";
     for(char c : seq2_str) sketch2.add_char(c);
-    FracMinHash sketch3(0.1, 5);
+    FracMinHash sketch3("03", 0.1, 5);
     std::string seq3_str = "ATACTACGCCGATTCTGCTG";
     for(char c : seq3_str) sketch3.add_char(c);
     // compute distances
