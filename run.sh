@@ -14,22 +14,23 @@ echo ""
 echo ""
 
 echo "--- Creating genome sketches... ---"
-K=21
+K=13
 SCALE=0.01
+N_BASES=10000000
 echo "Creating sketch for Saccharomyces cerevisiae..."
-./script_stream.sh -s saccharomyces_cerevisiae -l 1000000 | ./dist --create-sketch --k $K --scale $SCALE sc.sketch
+./script_stream.sh -s saccharomyces_cerevisiae -l $N_BASES | ./dist --create-sketch --k $K --scale $SCALE sc.sketch
 echo ""
 echo "Creating sketch for Homo sapiens..."
-./script_stream.sh -s homo_sapiens -l 1000000 | ./dist --create-sketch --k $K --scale $SCALE hs.sketch
+./script_stream.sh -s homo_sapiens -l $N_BASES | ./dist --create-sketch --k $K --scale $SCALE hs.sketch
 echo ""
 echo "Creating sketch for Mus musculus..."
-./script_stream.sh -s mus_musculus -l 1000000 | ./dist --create-sketch --k $K --scale $SCALE mm.sketch
+./script_stream.sh -s mus_musculus -l $N_BASES | ./dist --create-sketch --k $K --scale $SCALE mm.sketch
 echo ""
 echo "Creating sketch for Loxodonta africana..."
-./script_stream.sh -s loxodonta_africana -l 1000000 | ./dist --create-sketch --k $K --scale $SCALE la.sketch
+./script_stream.sh -s loxodonta_africana -l $N_BASES | ./dist --create-sketch --k $K --scale $SCALE la.sketch
 echo ""
 echo "Creating sketch for Drosophila melanogaster..."
-./script_stream.sh -s drosophila_melanogaster -l 1000000 | ./dist --create-sketch --k $K --scale $SCALE dm.sketch
+./script_stream.sh -s drosophila_melanogaster -l $N_BASES | ./dist --create-sketch --k $K --scale $SCALE dm.sketch
 echo ""
 echo "--- All sketches created successfully. ---"
 echo ""
