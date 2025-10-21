@@ -103,9 +103,7 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     size_t uni = sketch_.size() + other.sketch_.size() - inter; // union size
     uni = static_cast<double>(uni);
     double jac = (uni == 0.0) ? 0.0 : static_cast<double>(inter) / uni; // jaccard index
-
     std::cout << "Intersection: " << inter << ", Union: " << uni << ", Jaccard: " << jac << std::endl;
-
     return jac;
 }
 
@@ -119,19 +117,18 @@ void FracMinHash::save(const std::string &filename) const{
     std::ofstream out(filename, std::ios::binary);
     if(!out) throw std::runtime_error("cannot open file for writing: " + filename);
     // header: magic + version
-    constexpr char magic[4] = {'F', 'M', 'H', 0};
+    constexpr char magic[4] = {'F', 'M', 'H', 1};
     out.write(magic, 4);
-    // k (4 bytes), scale (8 bytes double), seed (8 bytes), threshold (8 bytes)
-    const uint32_t k32 = k_;
-    out.write(reinterpret_cast<const char*>(&k32), sizeof(k32));
+    // k (1 bytes), scale (8 bytes double), seed (8 bytes)
+    const uint8_t k8 = k_;
+    out.write(reinterpret_cast<const char*>(&k8), sizeof(k8));
     const double scale_d = scale_;
     out.write(reinterpret_cast<const char*>(&scale_d), sizeof(scale_d));
     out.write(reinterpret_cast<const char*>(&seed_), sizeof(seed_));
-    out.write(reinterpret_cast<const char*>(&threshold_), sizeof(threshold_));
     // number of hashes (8 bytes)
     const uint64_t n = sketch_.size();
     out.write(reinterpret_cast<const char*>(&n), sizeof(n));
-    // write hashes (8 bytes each) - unsorted order OK
+    // write hashes (8 bytes each), unsorted order OK
     for(auto h : sketch_) out.write(reinterpret_cast<const char*>(&h), sizeof(h));
     out.close();
 }
@@ -144,19 +141,16 @@ FracMinHash FracMinHash::load(const std::string &filename){
     if(in.gcount() != 4 || magic[0] != 'F' || magic[1] != 'M' || magic[2] != 'H'){
         throw std::runtime_error("invalid sketch file (magic mismatch)");
     }
-    uint32_t k32;
-    in.read(reinterpret_cast<char*>(&k32), sizeof(k32));
+    uint8_t k8;
+    in.read(reinterpret_cast<char*>(&k8), sizeof(k8));
     double scale_d;
     in.read(reinterpret_cast<char*>(&scale_d), sizeof(scale_d));
     uint64_t seed;
     in.read(reinterpret_cast<char*>(&seed), sizeof(seed));
-    uint64_t threshold;
-    in.read(reinterpret_cast<char*>(&threshold), sizeof(threshold));
     uint64_t n;
     in.read(reinterpret_cast<char*>(&n), sizeof(n));
-    FracMinHash fm(scale_d, k32, seed);
-    fm.threshold_ = threshold; // ensure an exact threshold
-    for (uint64_t i = 0; i < n; ++i) {
+    FracMinHash fm(scale_d, k8, seed);
+    for(uint64_t i = 0; i < n; i++){
         uint64_t h;
         in.read(reinterpret_cast<char*>(&h), sizeof(h));
         if (!in) throw std::runtime_error("unexpected EOF while reading sketch");
