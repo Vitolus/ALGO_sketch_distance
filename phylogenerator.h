@@ -35,7 +35,6 @@ struct Node{
     }
 };
 
-// TODO: build also graphic view of the tree
 /**
  * @brief a helper function to print the tree structure to the console
  */
@@ -94,7 +93,7 @@ inline void toNewickRecursive(const Node* node, std::string& newick_string){
     }
 }
 inline std::string toNewick(const Node* root){
-    std::string newick_string = "";
+    std::string newick_string;
     toNewickRecursive(root, newick_string);
     newick_string += ";";
     return newick_string;

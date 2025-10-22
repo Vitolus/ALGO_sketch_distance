@@ -13,7 +13,7 @@
 class FracMinHash{
 public:
     // scale in (0,1]; k must be <= 31 (2 bits per base fit in 62 bits)
-    FracMinHash(const std::string &filename, double scale, unsigned k, uint64_t seed = 1469598103934665603ULL);
+    FracMinHash(std::string filename, double scale, uint8_t k, uint64_t seed = 1469598103934665603ULL);
 
     /**
      * @brief add one base (ACGT); other characters reset the rolling window
@@ -48,7 +48,7 @@ public:
 
 private:
     std::string filename_;
-    unsigned k_;
+    uint8_t k_;
     double scale_;
     uint64_t seed_;
     uint64_t threshold_; // compare scrambled hash < threshold_

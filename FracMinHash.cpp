@@ -1,8 +1,9 @@
 #include "FracMinHash.h"
 #include <iostream>
+#include <utility>
 
-FracMinHash::FracMinHash(const std::string& filename, const double scale, const unsigned k, const uint64_t seed)
-    : filename_(filename), k_(k), scale_(scale), seed_(seed), fw_hash_(0), rc_hash_(0), filled_(0){
+FracMinHash::FracMinHash(std::string filename, const double scale, const uint8_t k, const uint64_t seed)
+    : filename_(std::move(filename)), k_(k), scale_(scale), seed_(seed), fw_hash_(0), rc_hash_(0), filled_(0){
     // require 2*k <= 62 to keep mask shifts safe with 1ULL << (2*k)
     if(k == 0 || k > 31) throw std::invalid_argument("k must be in 1..31");
     if(!(scale > 0.0 && scale <= 1.0)) throw std::invalid_argument("scale must be in (0,1]");
@@ -99,9 +100,8 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     if(small->size() > big->size()) std::swap(small, big);
     size_t inter = 0;
     for(auto h : *small) if(big->find(h) != big->end()) ++inter; // count intersection
-    size_t uni = sketch_.size() + other.sketch_.size() - inter; // union size
-    uni = static_cast<double>(uni);
-    double jac = (uni == 0.0) ? 0.0 : static_cast<double>(inter) / uni; // jaccard index
+    const size_t uni =sketch_.size() + other.sketch_.size() - inter; // union size
+    const double jac = (uni == 0) ? 0.0 : static_cast<double>(inter) / static_cast<double>(uni); // jaccard index
     std::cout << filename_<< "," << other.filename_ << "    Intersection: " << inter << ", Union: " << uni << ", Jaccard: " << jac 
     << std::endl;
     return jac;
