@@ -11,4 +11,6 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
 add_executable(dist main.cpp
         FracMinHash.cpp
         FracMinHash.h
-        phylogenerator.h)
+        phylogenerator.h
+        BloomFilter.cpp
+        BloomFilter.h)
