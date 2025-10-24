@@ -68,7 +68,7 @@ void createSketch(const string& output_file, const unsigned k, const double scal
     cerr << "   Processed " << base_count << " bases\n";
     cerr << "   Retained " << sketch.sketch_size() << " hashes in the sketch\n";
     cerr << "   Sketch saved successfully to " << output_file << endl;
-    cout << "Memory usage: " << (std::filesystem::file_size(output_file) / 1024) << " bytes\n";
+    cout << "Memory usage: " << (std::filesystem::file_size(output_file) / 1024) << " kilobytes\n";
 }
 
 /**
