@@ -1,9 +1,12 @@
 #include "FracMinHash.h"
 #include <iostream>
 #include <utility>
+#include <vector>
 
-FracMinHash::FracMinHash(std::string filename, const double scale, const uint8_t k, const uint64_t seed)
-    : filename_(std::move(filename)), k_(k), scale_(scale), seed_(seed), fw_hash_(0), rc_hash_(0), filled_(0){
+FracMinHash::FracMinHash(std::string filename, const double scale, const uint8_t k, const uint64_t seed, uint64_t bloom_size_bits, uint8_t bloom_num_hashes)
+    : filename_(std::move(filename)), k_(k), scale_(scale), seed_(seed), 
+      sketch_(bloom_size_bits, bloom_num_hashes), sketch_item_count_(0),
+      fw_hash_(0), rc_hash_(0), filled_(0){
     // require 2*k <= 62 to keep mask shifts safe with 1ULL << (2*k)
     if(k == 0 || k > 31) throw std::invalid_argument("k must be in 1..31");
     if(!(scale > 0.0 && scale <= 1.0)) throw std::invalid_argument("scale must be in (0,1]");
@@ -71,38 +74,66 @@ void FracMinHash::add_char(const char c){
 void FracMinHash::add_kmer_from_window(){
     const uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
     if(const uint64_t s = scramble(canonical, seed_); s < threshold_){
-        // store the scrambled hash value (store s to simplify comparisons across sketches with the same seed / scale)
-        sketch_.insert(s);
+        // store the scrambled hash value in the bloom filter
+        if (!sketch_.contains(s)) {
+            sketch_.add(s);
+            sketch_item_count_++;
+        }
     }
 }
 
 size_t FracMinHash::sketch_size() const{
-    return sketch_.size();
+    // Returns the count of items added, not the bloom filter size in bits.
+    // For a more accurate cardinality estimate from a full bloom filter,
+    // a formula could be used, but this direct count is better when available.
+    return sketch_item_count_;
 }
 
-/* void FracMinHash::merge(const FracMinHash &other){
+void FracMinHash::merge(const FracMinHash &other){
     if(k_ != other.k_) throw std::invalid_argument("k mismatch in merge");
     if(scale_ != other.scale_) throw std::invalid_argument("scale mismatch in merge");
     if(seed_ != other.seed_) throw std::invalid_argument("seed mismatch in merge");
-    // union of sets
-    for(auto h : other.sketch_) sketch_.insert(h);
-} */
+    if(sketch_.size_in_bits() != other.sketch_.size_in_bits() || sketch_.num_hashes() != other.sketch_.num_hashes()) {
+        throw std::invalid_argument("Bloom filter parameters must match for merge");
+    }
+    sketch_.merge(other.sketch_);
+    // Note: sketch_item_count_ becomes an estimate after merging.
+    // A proper calculation would require cardinality estimation.
+    // For simplicity, we can sum them, but it's an overestimation.
+    sketch_item_count_ += other.sketch_item_count_;
+}
 
 double FracMinHash::jaccard(const FracMinHash &other) const{
     if(k_ != other.k_) throw std::invalid_argument("k mismatch in jaccard");
     if(scale_ != other.scale_) throw std::invalid_argument("scale mismatch in jaccard");
     if(seed_ != other.seed_) throw std::invalid_argument("seed mismatch in jaccard");
-    if(sketch_.empty() && other.sketch_.empty()) return 1.0; // both empty -> identical
-    if(sketch_.empty() || other.sketch_.empty()) return 0.0; // one empty -> disjoint
-    // compute intersection size
-    const std::unordered_set<uint64_t> *small = &sketch_;
-    const std::unordered_set<uint64_t> *big = &other.sketch_;
-    if(small->size() > big->size()) std::swap(small, big);
-    size_t inter = 0;
-    for(auto h : *small) if(big->find(h) != big->end()) ++inter; // count intersection
-    const size_t uni =sketch_.size() + other.sketch_.size() - inter; // union size
-    const double jac = (uni == 0) ? 0.0 : static_cast<double>(inter) / static_cast<double>(uni); // jaccard index
-    std::cout << filename_<< "," << other.filename_ << "    Intersection: " << inter << ", Union: " << uni << ", Jaccard: " << jac 
+    if(sketch_.size_in_bits() != other.sketch_.size_in_bits() || sketch_.num_hashes() != other.sketch_.num_hashes()) {
+        throw std::invalid_argument("Bloom filter parameters must match for Jaccard estimation");
+    }
+
+    const auto& bits1 = sketch_.get_bits();
+    const auto& bits2 = other.sketch_.get_bits();
+
+    uint64_t intersection_bits = 0;
+    uint64_t union_bits = 0;
+
+    for (uint64_t i = 0; i < sketch_.size_in_bits(); ++i) {
+        const bool bit1 = bits1[i];
+        const bool bit2 = bits2[i];
+        if (bit1 && bit2) {
+            intersection_bits++;
+        }
+        if (bit1 || bit2) {
+            union_bits++;
+        }
+    }
+
+    if (union_bits == 0) return 1.0; // Both empty -> identical
+
+    // The Jaccard index of the bit arrays is an estimator for the Jaccard index of the underlying sets.
+    const double jac = static_cast<double>(intersection_bits) / static_cast<double>(union_bits);
+    
+    std::cout << filename_<< "," << other.filename_ << "    Bit Intersection: " << intersection_bits << ", Bit Union: " << union_bits << ", Jaccard Estimate: " << jac 
     << std::endl;
     return jac;
 }
@@ -117,19 +148,29 @@ void FracMinHash::save(const std::string &filename) const{
     std::ofstream out(filename, std::ios::binary);
     if(!out) throw std::runtime_error("cannot open file for writing: " + filename);
     // header: magic + version
-    constexpr char magic[4] = {'F', 'M', 'H', 1};
+    constexpr char magic[4] = {'F', 'B', 'F', 1}; // FracMinHash Bloom Filter v1
     out.write(magic, 4);
-    // k (1 bytes), scale (8 bytes double), seed (8 bytes)
-    const uint8_t k8 = k_;
-    out.write(reinterpret_cast<const char*>(&k8), sizeof(k8));
-    const double scale_d = scale_;
-    out.write(reinterpret_cast<const char*>(&scale_d), sizeof(scale_d));
+    // params: k, scale, seed
+    out.write(reinterpret_cast<const char*>(&k_), sizeof(k_));
+    out.write(reinterpret_cast<const char*>(&scale_), sizeof(scale_));
     out.write(reinterpret_cast<const char*>(&seed_), sizeof(seed_));
-    // number of hashes (8 bytes)
-    const uint64_t n = sketch_.size();
-    out.write(reinterpret_cast<const char*>(&n), sizeof(n));
-    // write hashes (8 bytes each), unsorted order OK
-    for(auto h : sketch_) out.write(reinterpret_cast<const char*>(&h), sizeof(h));
+    
+    // bloom filter params: size in bits, num hashes
+    const uint64_t bf_size_bits = sketch_.size_in_bits();
+    const uint8_t bf_num_hashes = sketch_.num_hashes();
+    out.write(reinterpret_cast<const char*>(&bf_size_bits), sizeof(bf_size_bits));
+    out.write(reinterpret_cast<const char*>(&bf_num_hashes), sizeof(bf_num_hashes));
+
+    // Serialize the bit vector by packing bits into bytes
+    const auto& bits = sketch_.get_bits();
+    const size_t num_bytes = (bits.size() + 7) / 8;
+    std::vector<char> packed(num_bytes, 0);
+    for(size_t i = 0; i < bits.size(); ++i) {
+        if (bits[i]) {
+            packed[i / 8] |= (1 << (i % 8));
+        }
+    }
+    out.write(packed.data(), packed.size());
     out.close();
 }
 
@@ -138,23 +179,44 @@ FracMinHash FracMinHash::load(const std::string &filename){
     if(!in) throw std::runtime_error("cannot open file for reading: " + filename);
     char magic[4];
     in.read(magic, 4);
-    if(in.gcount() != 4 || magic[0] != 'F' || magic[1] != 'M' || magic[2] != 'H'){
-        throw std::runtime_error("invalid sketch file (magic mismatch)");
+    if(in.gcount() != 4 || magic[0] != 'F' || magic[1] != 'B' || magic[2] != 'F'){
+        throw std::runtime_error("invalid sketch file (magic mismatch for bloom filter format)");
     }
-    uint8_t k8;
-    in.read(reinterpret_cast<char*>(&k8), sizeof(k8));
-    double scale_d;
-    in.read(reinterpret_cast<char*>(&scale_d), sizeof(scale_d));
+    uint8_t k;
+    double scale;
     uint64_t seed;
+    in.read(reinterpret_cast<char*>(&k), sizeof(k));
+    in.read(reinterpret_cast<char*>(&scale), sizeof(scale));
     in.read(reinterpret_cast<char*>(&seed), sizeof(seed));
-    uint64_t n;
-    in.read(reinterpret_cast<char*>(&n), sizeof(n));
-    FracMinHash fm(filename, scale_d, k8, seed);
-    for(uint64_t i = 0; i < n; i++){
-        uint64_t h;
-        in.read(reinterpret_cast<char*>(&h), sizeof(h));
-        if (!in) throw std::runtime_error("unexpected EOF while reading sketch");
-        fm.sketch_.insert(h);
+
+    uint64_t bf_size_bits;
+    uint8_t bf_num_hashes;
+    in.read(reinterpret_cast<char*>(&bf_size_bits), sizeof(bf_size_bits));
+    in.read(reinterpret_cast<char*>(&bf_num_hashes), sizeof(bf_num_hashes));
+
+    FracMinHash fm(filename, scale, k, seed, bf_size_bits, bf_num_hashes);
+
+    // Deserialize the bit vector
+    const size_t num_bytes = (bf_size_bits + 7) / 8;
+    std::vector<char> packed(num_bytes);
+    in.read(packed.data(), num_bytes);
+    if (static_cast<size_t>(in.gcount()) != num_bytes) {
+        throw std::runtime_error("unexpected EOF while reading sketch bitfield");
     }
+
+    // Manually set the bits in the new filter
+    auto& bits = const_cast<std::vector<bool>&>(fm.sketch_.get_bits());
+    size_t bit_count = 0;
+    for(size_t i = 0; i < packed.size() && bit_count < bf_size_bits; ++i) {
+        for(int j = 0; j < 8 && bit_count < bf_size_bits; ++j) {
+            if ((packed[i] >> j) & 1) {
+                bits[bit_count] = true;
+            }
+            bit_count++;
+        }
+    }
+    // Note: sketch_item_count_ is not stored, so it will be 0 on load.
+    // This is a limitation; for accurate cardinality, it would need to be stored
+    // or estimated from the loaded filter.
     return fm;
 }
