@@ -110,30 +110,42 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     if(sketch_.size_in_bits() != other.sketch_.size_in_bits() || sketch_.num_hashes() != other.sketch_.num_hashes()) {
         throw std::invalid_argument("Bloom filter parameters must match for Jaccard estimation");
     }
-
+    const double m = static_cast<double>(sketch_.size_in_bits());
+    const double k = static_cast<double>(sketch_.num_hashes());
+    if (m == 0) return 1.0; // Avoid division by zero
     const auto& bits1 = sketch_.get_bits();
     const auto& bits2 = other.sketch_.get_bits();
-
-    uint64_t intersection_bits = 0;
-    uint64_t union_bits = 0;
-
+    uint64_t set_bits1 = 0;
+    uint64_t set_bits2 = 0;
+    uint64_t union_set_bits = 0;
     for (uint64_t i = 0; i < sketch_.size_in_bits(); ++i) {
         const bool bit1 = bits1[i];
         const bool bit2 = bits2[i];
-        if (bit1 && bit2) {
-            intersection_bits++;
-        }
-        if (bit1 || bit2) {
-            union_bits++;
-        }
+        if (bit1) set_bits1++;
+        if (bit2) set_bits2++;
+        if (bit1 || bit2) union_set_bits++;
     }
-
-    if (union_bits == 0) return 1.0; // Both empty -> identical
-
-    // The Jaccard index of the bit arrays is an estimator for the Jaccard index of the underlying sets.
-    const double jac = static_cast<double>(intersection_bits) / static_cast<double>(union_bits);
-    
-    std::cout << filename_<< "," << other.filename_ << "    Bit Intersection: " << intersection_bits << ", Bit Union: " << union_bits << ", Jaccard Estimate: " << jac 
+    if (union_set_bits == 0) return 1.0; // Both empty -> identical
+    // Cardinality estimation function
+    auto estimate_cardinality = [m, k](uint64_t set_bits) -> double {
+        if (set_bits == 0) return 0.0;
+        if (set_bits >= m) return -1.0; // Saturated, estimate is unreliable
+        return -m / k * std::log(1.0 - static_cast<double>(set_bits) / m);
+    };
+    double card1 = estimate_cardinality(set_bits1);
+    double card2 = estimate_cardinality(set_bits2);
+    double card_union = estimate_cardinality(union_set_bits);
+    // If any estimate is unreliable (filter is saturated), fall back to the simpler bit-based Jaccard.
+    if (card1 < 0 || card2 < 0 || card_union < 0) {
+        uint64_t intersection_bits = set_bits1 + set_bits2 - union_set_bits;
+        return static_cast<double>(intersection_bits) / static_cast<double>(union_set_bits);
+    }
+    // Estimate intersection size using the inclusion-exclusion principle
+    double card_intersection = card1 + card2 - card_union;
+    if (card_intersection < 0) card_intersection = 0;
+    if (card_union < 1.0) return 1.0; // Avoid division by zero for very small cardinalities
+    double jac = card_intersection / card_union;
+    std::cout << filename_<< "," << other.filename_ << "    Estimated Intersection: " << card_intersection << ", Estimated Union: " << card_union << ", Jaccard Estimate: " << jac 
     << std::endl;
     return jac;
 }
@@ -154,13 +166,11 @@ void FracMinHash::save(const std::string &filename) const{
     out.write(reinterpret_cast<const char*>(&k_), sizeof(k_));
     out.write(reinterpret_cast<const char*>(&scale_), sizeof(scale_));
     out.write(reinterpret_cast<const char*>(&seed_), sizeof(seed_));
-    
     // bloom filter params: size in bits, num hashes
     const uint64_t bf_size_bits = sketch_.size_in_bits();
     const uint8_t bf_num_hashes = sketch_.num_hashes();
     out.write(reinterpret_cast<const char*>(&bf_size_bits), sizeof(bf_size_bits));
     out.write(reinterpret_cast<const char*>(&bf_num_hashes), sizeof(bf_num_hashes));
-
     // Serialize the bit vector by packing bits into bytes
     const auto& bits = sketch_.get_bits();
     const size_t num_bytes = (bits.size() + 7) / 8;
@@ -188,14 +198,11 @@ FracMinHash FracMinHash::load(const std::string &filename){
     in.read(reinterpret_cast<char*>(&k), sizeof(k));
     in.read(reinterpret_cast<char*>(&scale), sizeof(scale));
     in.read(reinterpret_cast<char*>(&seed), sizeof(seed));
-
     uint64_t bf_size_bits;
     uint8_t bf_num_hashes;
     in.read(reinterpret_cast<char*>(&bf_size_bits), sizeof(bf_size_bits));
     in.read(reinterpret_cast<char*>(&bf_num_hashes), sizeof(bf_num_hashes));
-
     FracMinHash fm(filename, scale, k, seed, bf_size_bits, bf_num_hashes);
-
     // Deserialize the bit vector
     const size_t num_bytes = (bf_size_bits + 7) / 8;
     std::vector<char> packed(num_bytes);
@@ -203,7 +210,6 @@ FracMinHash FracMinHash::load(const std::string &filename){
     if (static_cast<size_t>(in.gcount()) != num_bytes) {
         throw std::runtime_error("unexpected EOF while reading sketch bitfield");
     }
-
     // Manually set the bits in the new filter
     auto& bits = const_cast<std::vector<bool>&>(fm.sketch_.get_bits());
     size_t bit_count = 0;
