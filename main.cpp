@@ -44,12 +44,14 @@ string extractBaseName(const string& path){
     return filename;
 }
 
-void createSketch(const string& output_file, const unsigned k, const double scale, const uint64_t seed){
+void createSketch(const string& output_file, const uint8_t k, const double scale, const uint64_t seed,
+    const uint64_t bloom_bits, const uint8_t bloom_hashes){
     // print progress messages to stderr
     cerr << "Starting sketch creation from standard input...\n";
-    cerr << "   Parameters: k=" << k << ", scale=" << scale << ", seed=" << seed << endl;
+    cerr << "   Parameters: k=" << k << ", scale=" << scale << ", seed=" << seed << ", bf num bits=" << bloom_bits
+    << ", bf num hashes=" << bloom_hashes << endl;
     cerr << "   Output will be saved to: " << output_file << endl;
-    FracMinHash sketch(output_file, scale, k, seed);
+    FracMinHash sketch(output_file, scale, k, seed, bloom_bits, bloom_hashes);
     char current_base;
     unsigned long long base_count = 0;
     // reading one character at a time from stdin
@@ -181,7 +183,7 @@ int main(int argc, char* argv[]){
             printUsage(argv[0]);
             return 1;
         }
-        unsigned k = 0;
+        uint8_t k = 0;
         double d_max = 0.0;
         double scale = 0.001;
         uint64_t seed = 1469598103934665603ULL;
@@ -258,17 +260,19 @@ int main(int argc, char* argv[]){
             }
             // Calculate k using the formula k = log(P_chance) / log(1 - d_max)
             const double p_chance = 0.01;
-            k = static_cast<unsigned>(std::round(std::log(p_chance) / std::log(1.0 - d_max)));
+            k = static_cast<uint8_t>(std::round(std::log(p_chance) / std::log(1.0 - d_max)));
             cerr << "Using automatically determined k=" << k << " from d_max=" << d_max << endl;
         } else { // Neither was provided, use default k
             k = 21;
         }
         // Clamp k to the valid range [1, 31] supported by FracMinHash
-        k = std::max(1u, std::min(31u, k));
-        auto start_time = std::chrono::high_resolution_clock::now();
-        createSketch(output_file, k, scale, seed);
-        auto end_time = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed = end_time - start_time;
+        k = std::max(static_cast<uint8_t>(1), std::min(static_cast<uint8_t>(31), k));
+        const auto bloom_bits = static_cast<uint64_t>(-1 * (30000 * log(0.01)) / pow(2.0,log(2)));
+        const auto bloom_hashes = static_cast<uint8_t>((bloom_bits / 30000) * log(2.0));
+        const auto start_time = std::chrono::high_resolution_clock::now();
+        createSketch(output_file, k, scale, seed, bloom_bits, bloom_hashes);
+        const auto end_time = std::chrono::high_resolution_clock::now();
+        const std::chrono::duration<double> elapsed = end_time - start_time;
 
         cout << "Total time: " << elapsed.count() << "s\n";
     }else if(command == "--distance"){
@@ -281,10 +285,10 @@ int main(int argc, char* argv[]){
         for(int i = 2; i < argc; i++){
             files.emplace_back(argv[i]);
         }
-        auto start_time = std::chrono::high_resolution_clock::now();
+        const auto start_time = std::chrono::high_resolution_clock::now();
         auto [names, matrix] = computeDistance(files);
-        auto end_time = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed = end_time - start_time;
+        const auto end_time = std::chrono::high_resolution_clock::now();
+        const std::chrono::duration<double> elapsed = end_time - start_time;
         cout << "Distance matrix computed in " << elapsed.count() << "s\n";
         cout << "--- Phylip Distance Matrix ---\n";
         printDistanceMatrix(names, matrix);

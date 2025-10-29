@@ -15,13 +15,13 @@ echo ""
 
 echo "--- Creating genome sketches... ---"
 K=13
-SCALE=0.01
+SCALE=0.001
 N_BASES=10000000
-echo "Creating sketch for Saccharomyces cerevisiae..."
-./script_stream.sh -s saccharomyces_cerevisiae | ./dist --create-sketch --k $K --scale $SCALE sc.sketch
-echo ""
 echo "Creating sketch for Homo sapiens..."
 ./script_stream.sh -s homo_sapiens | ./dist --create-sketch --k $K --scale $SCALE hs.sketch
+echo ""
+echo "Creating sketch for Saccharomyces cerevisiae..."
+./script_stream.sh -s saccharomyces_cerevisiae | ./dist --create-sketch --k $K --scale $SCALE sc.sketch
 echo ""
 echo "Creating sketch for Mus musculus..."
 ./script_stream.sh -s mus_musculus | ./dist --create-sketch --k $K --scale $SCALE mm.sketch

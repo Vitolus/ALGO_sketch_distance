@@ -3,10 +3,10 @@
 #include <utility>
 #include <vector>
 
-FracMinHash::FracMinHash(std::string filename, const double scale, const uint8_t k, const uint64_t seed, uint64_t bloom_size_bits, uint8_t bloom_num_hashes)
-    : filename_(std::move(filename)), k_(k), scale_(scale), seed_(seed), 
-      sketch_(bloom_size_bits, bloom_num_hashes), sketch_item_count_(0),
-      fw_hash_(0), rc_hash_(0), filled_(0){
+FracMinHash::FracMinHash(std::string filename, const double scale, const uint8_t k, const uint64_t seed,
+    const uint64_t bloom_size_bits, const uint8_t bloom_num_hashes)
+    : filename_(std::move(filename)), k_(k), scale_(scale), seed_(seed), fw_hash_(0), rc_hash_(0), filled_(0),
+    sketch_(bloom_size_bits, bloom_num_hashes), sketch_item_count_(0){
     // require 2*k <= 62 to keep mask shifts safe with 1ULL << (2*k)
     if(k == 0 || k > 31) throw std::invalid_argument("k must be in 1..31");
     if(!(scale > 0.0 && scale <= 1.0)) throw std::invalid_argument("scale must be in (0,1]");

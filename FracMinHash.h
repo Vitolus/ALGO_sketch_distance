@@ -15,7 +15,8 @@ public:
     // scale in (0,1]; k must be <= 31
     // bloom_size_bits: size of the bloom filter in bits. 800k bits = 100KB.
     // bloom_num_hashes: number of hash functions for the bloom filter.
-    FracMinHash(std::string filename, double scale, uint8_t k, uint64_t seed = 1469598103934665603ULL, uint64_t bloom_size_bits = 800000, uint8_t bloom_num_hashes = 5);
+    FracMinHash(std::string filename, double scale, uint8_t k, uint64_t seed = 1469598103934665603ULL,
+        uint64_t bloom_size_bits = 400000, uint8_t bloom_num_hashes = 5);
 
     /**
      * @brief add one base (ACGT); other characters reset the rolling window
@@ -25,7 +26,7 @@ public:
     /**
      * @brief number of items added to the sketch
      */
-    size_t sketch_size() const;
+    [[nodiscard]] size_t sketch_size() const;
 
     /**
      * @brief merge: sketches must use the same scale and k
@@ -35,12 +36,12 @@ public:
     /**
      * @brief estimate Jaccard assuming same scale; returns value in [0,1]
      */
-    double jaccard(const FracMinHash &other) const;
+    [[nodiscard]] double jaccard(const FracMinHash &other) const;
 
     /**
      * @brief distance = 1 - Jaccard
      */
-    double distance(const FracMinHash &other) const;
+    [[nodiscard]] double distance(const FracMinHash &other) const;
 
     /**
      * @brief save/load binary sketch file (compact: first k, then scale as double, seed, then bloom filter data)
