@@ -8,7 +8,7 @@ set -e
 
 echo "--- Building the project... ---"
 # Assuming g++ is available. The -O3 flag enables optimizations.
-g++ -std=c++17 -O3 main.cpp FracMinHash.h FracMinHash.cpp phylogenerator.h BloomFilter.cpp BloomFilter.h -o dist
+g++ -std=c++17 -O3 -fopenmp main.cpp FracMinHash.h FracMinHash.cpp phylogenerator.h BloomFilter.cpp BloomFilter.h -o dist
 echo "Build complete. Executable 'dist' created."
 echo ""
 echo ""

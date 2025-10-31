@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <omp.h>
 #include "FracMinHash.h"
 #include "phylogenerator.h"
 
@@ -18,16 +19,17 @@ using std::vector;
 
 void printUsage(const std::string& program_name) {
     std::cerr << "Usage: \n"
-              << "  " << program_name << " --create-sketch [options] <output.sketch>\n"
-              << "  " << program_name << " --distance <G1.sketch> <G2.sketch> ...\n\n"
-              << "Commands:\n"
-              << "  --create-sketch  Creates a sketch from a genome sequence provided via stdin.\n"
-              << "  --distance       Calculates and prints the distance matrix, UPGMA tree, and NJ tree.\n\n"
-              << "Options for --create-sketch:\n"
-              << "  --k <int>        K-mer size. Overrides --d-max if both are provided. (default: 21)\n"
-              << "  --d-max <float>  Max evolutionary distance. Used to calculate k if --k is not set.\n"
-              << "  --scale <float>  Scaling factor (default: 0.001)\n"
-              << "  --seed <int>     Seed for hashing (default: 1469598103934665603)\n";
+    << "  " << program_name << " --create-sketch [options] <output.sketch>\n"
+    << "  " << program_name << " --distance <G1.sketch> <G2.sketch> ...\n\n"
+    << "Commands:\n"
+    << "  --create-sketch  Creates a sketch from a genome sequence provided via stdin.\n"
+    << "  --distance       Calculates and prints the distance matrix, UPGMA tree, and NJ tree.\n\n"
+    << "Options for --create-sketch:\n"
+    << "  --threads <int>  Number of threads to use. (default: all available threads)\n"
+    << "  --k <int>        K-mer size. Overrides --d-max if both are provided. (default: 13)\n"
+    << "  --d-max <float>  Max evolutionary distance. Used to calculate k if --k is not set.\n"
+    << "  --scale <float>  Scaling factor (default: 0.001)\n"
+    << "  --seed <int>     Seed for hashing (default: 1469598103934665603)\n";
 }
 
 /**
@@ -45,42 +47,54 @@ string extractBaseName(const string& path){
 }
 
 void createSketch(const string& output_file, const uint8_t k, const double scale, const uint64_t seed,
-    const uint64_t bloom_bits, const uint8_t bloom_hashes){
+    const uint64_t bloom_bits, const uint8_t bloom_hashes, const int num_threads){
     // print progress messages to stderr
     cerr << "Starting sketch creation from standard input...\n";
     cerr << "   Parameters: k=" << static_cast<int>(k) << ", scale=" << scale << ", seed=" << seed << endl;
     cerr << "   Bloom filter: num bits=" << bloom_bits << ", num hashes=" << static_cast<int>(bloom_hashes) << endl;
+    cerr << "   Number of threads: " << num_threads << endl;
     cerr << "   Output will be saved to: " << output_file << endl;
-    FracMinHash sketch(output_file, scale, k, seed, bloom_bits, bloom_hashes);
-    unsigned long long base_count = 0;
-
+    omp_set_num_threads(num_threads);
+    // create partial sketches
+    vector<FracMinHash> partial_sketches;
+    for (unsigned int i = 0; i < num_threads; ++i){
+        partial_sketches.emplace_back(output_file, scale, k, seed, bloom_bits, bloom_hashes);
+    }
+    unsigned long long total_base_count = 0;
     // buffered reading
-    constexpr size_t BUFFER_SIZE = 64 * 1024; // 64KB buffer
-    std::vector<char> buffer(BUFFER_SIZE);
-    while (std::cin.read(buffer.data(), buffer.size())) {
+    constexpr size_t CHUNK_SIZE = 16 * 1024 * 1024; // 16MB buffer
+    std::vector<char> chunk_buffer(CHUNK_SIZE);
+    while (std::cin.read(chunk_buffer.data(), chunk_buffer.size()) || std::cin.gcount() > 0) {
         const size_t bytes_read = std::cin.gcount();
-        for (size_t i = 0; i < bytes_read; ++i) {
-            sketch.add_char(buffer[i]);
+        if (bytes_read == 0) continue;
+        #pragma omp parallel reduction(+:total_base_count)
+        {
+            const int thread_id = omp_get_thread_num();
+            const int num_threads_active = omp_get_num_threads();
+            const size_t chunk_per_thread = (bytes_read + num_threads_active - 1) / num_threads_active;
+            const size_t start = thread_id * chunk_per_thread;
+            const size_t end = std::min(start + chunk_per_thread, bytes_read);
+            // each thread processes its portion
+            for (size_t i = start; i < end; ++i) {
+                partial_sketches[thread_id].add_char(chunk_buffer[i]);
+            }
+            total_base_count += (end > start) ? (end - start) : 0;
         }
-        base_count += bytes_read;
     }
-    // Process the final partial buffer
-    const size_t bytes_read = std::cin.gcount();
-    if (bytes_read > 0) {
-        for (size_t i = 0; i < bytes_read; ++i) {
-            sketch.add_char(buffer[i]);
-        }
-        base_count += bytes_read;
+    // merge partial sketches
+    for (unsigned int i = 1; i < num_threads; ++i) {
+        partial_sketches[0].merge(partial_sketches[i]);
     }
+    FracMinHash& final_sketch = partial_sketches[0];
     // finalize and save the sketch
     try{
-        sketch.save(output_file);
+        final_sketch.save(output_file);
     }catch(const std::exception& e){
         cerr << "Error saving sketch: " << e.what() << endl;
         return;
     }
-    cerr << "   Processed " << base_count << " bases\n";
-    cerr << "   Retained " << sketch.sketch_size() << " hashes in the sketch\n";
+    cerr << "   Processed " << total_base_count << " bases\n";
+    cerr << "   Retained " << final_sketch.sketch_size() << " hashes in the sketch\n";
     cerr << "   Sketch saved successfully to " << output_file << endl;
     cout << "Memory usage: " << (std::filesystem::file_size(output_file) / 1024) << " kilobytes\n";
 }
@@ -200,8 +214,20 @@ int main(int argc, char* argv[]){
         double scale = 0.001;
         uint64_t seed = 1469598103934665603ULL;
         string output_file;
+        int num_threads = omp_get_max_threads(); // default to all available threads
         for(int i = 2; i < argc; i++){
-            if(string arg = argv[i]; arg == "--k"){
+            if(string arg = argv[i]; arg == "--threads"){
+                if(i + 1 >= argc){
+                    cerr << "Error: --threads requires an integer argument.\n";
+                    printUsage(argv[0]);
+                    return 1;
+                }
+                try{
+                    num_threads = std::stoi(argv[++i]);
+                }catch(const std::exception& e){
+                    cerr << "Error: --threads argument must be an integer: " << e.what() << endl;
+                }
+            }else if(arg == "--k"){
                 if(i + 1 >= argc){
                     cerr << "Error: --k requires an integer argument.\n";
                     printUsage(argv[0]);
@@ -282,7 +308,7 @@ int main(int argc, char* argv[]){
         const auto bloom_bits = static_cast<uint64_t>(-1 * (30000 * log(0.01)) / (log(2) * log(2)));
         const auto bloom_hashes = static_cast<uint8_t>((bloom_bits / 30000) * log(2.0));
         const auto start_time = std::chrono::high_resolution_clock::now();
-        createSketch(output_file, k, scale, seed, bloom_bits, bloom_hashes);
+        createSketch(output_file, k, scale, seed, bloom_bits, bloom_hashes, num_threads);
         const auto end_time = std::chrono::high_resolution_clock::now();
         const std::chrono::duration<double> elapsed = end_time - start_time;
 
