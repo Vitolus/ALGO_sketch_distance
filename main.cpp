@@ -57,32 +57,32 @@ void createSketch(const string& output_file, const uint8_t k, const double scale
     omp_set_num_threads(num_threads);
     // create partial sketches
     vector<FracMinHash> partial_sketches;
-    for (unsigned int i = 0; i < num_threads; ++i){
+    for(unsigned int i = 0; i < num_threads; ++i){
         partial_sketches.emplace_back(output_file, scale, k, seed, bloom_bits, bloom_hashes);
     }
     unsigned long long total_base_count = 0;
-    // buffered reading
     constexpr size_t CHUNK_SIZE = 16 * 1024 * 1024; // 16MB buffer
     std::vector<char> chunk_buffer(CHUNK_SIZE);
-    while (std::cin.read(chunk_buffer.data(), chunk_buffer.size()) || std::cin.gcount() > 0) {
-        const size_t bytes_read = std::cin.gcount();
-        if (bytes_read == 0) continue;
-        #pragma omp parallel reduction(+:total_base_count)
-        {
-            const int thread_id = omp_get_thread_num();
-            const int num_threads_active = omp_get_num_threads();
-            const size_t chunk_per_thread = (bytes_read + num_threads_active - 1) / num_threads_active;
-            const size_t start = thread_id * chunk_per_thread;
-            const size_t end = std::min(start + chunk_per_thread, bytes_read);
-            // each thread processes its portion
-            for (size_t i = start; i < end; ++i) {
-                partial_sketches[thread_id].add_char(chunk_buffer[i]);
-            }
-            total_base_count += (end > start) ? (end - start) : 0;
+    while(true){
+        size_t bytes_read;
+        // Master thread reads the next chunk of data from stdin before the parallel region
+        std::cin.read(chunk_buffer.data(), CHUNK_SIZE);
+        bytes_read = std::cin.gcount();
+        if(bytes_read == 0){
+            break; // End of input
+        }
+        // All threads process their share of the chunk
+        #pragma omp parallel for reduction(+:total_base_count)
+        for(size_t i = 0; i < bytes_read; ++i){
+            partial_sketches[omp_get_thread_num()].add_char(chunk_buffer[i]);
+        }
+        total_base_count += bytes_read;
+        if(bytes_read < CHUNK_SIZE){
+            break; // Last chunk was processed, exit
         }
     }
     // merge partial sketches
-    for (unsigned int i = 1; i < num_threads; ++i) {
+    for(unsigned int i = 1; i < num_threads; ++i){
         partial_sketches[0].merge(partial_sketches[i]);
     }
     FracMinHash& final_sketch = partial_sketches[0];

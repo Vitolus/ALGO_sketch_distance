@@ -6,9 +6,6 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
-# Enable OpenMP cancellation for the duration of this script
-export OMP_CANCELLATION=true
-
 echo "--- Building the project... ---"
 # Assuming g++ is available. The -O3 flag enables optimizations.
 g++ -std=c++17 -O3 -fopenmp main.cpp FracMinHash.h FracMinHash.cpp phylogenerator.h BloomFilter.cpp BloomFilter.h -o dist
