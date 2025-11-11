@@ -33,14 +33,28 @@ inline uint64_t FracMinHash::splitmix64(uint64_t x){
     return x;
 }
 
+static const int8_t base_code_table[] = {
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1, 0,-1, 1,-1,-1,-1, 2,-1,-1,-1,-1,-1,-1,-1,-1, // A=0, C=1, G=2
+    -1,-1,-1,-1, 3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // T=3
+    -1, 0,-1, 1,-1,-1,-1, 2,-1,-1,-1,-1,-1,-1,-1,-1, // a=0, c=1, g=2
+    -1,-1,-1,-1, 3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // t=3
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+};
+
 inline int FracMinHash::base_to_code(const char c){
-    switch(c){
-        case 'A': return 0;
-        case 'C': return 1;
-        case 'G': return 2;
-        case 'T': return 3;
-        default: return -1; // N or other -> invalid
-    }
+    return base_code_table[static_cast<unsigned char>(c)];
 }
 
 inline uint64_t FracMinHash::scramble(const uint64_t x, const uint64_t seed){
@@ -49,34 +63,39 @@ inline uint64_t FracMinHash::scramble(const uint64_t x, const uint64_t seed){
 }
 
 void FracMinHash::add_char(const char c){
-    const int code = base_to_code(c);
-    if(code < 0){
-        // reset rolling window on invalid base
-        fw_hash_ = rc_hash_ = 0;
-        filled_ = 0;
-        return;
-    }
-    // update forward: shift left 2 bits, add code, keep only 2k bits
-    fw_hash_ = ((fw_hash_ << 2) | static_cast<uint64_t>(code)) & ((1ULL << (2*k_)) - 1ULL);
-    // update reverse complement: shift right 2 bits and add complement in highest positions
-    // complement: A<->T, C<->G => code_comp = 3 - code
-    const unsigned comp = 3 - static_cast<unsigned>(code);
-    // rc_hash_ represented in lower 2k bits as a reverse complement of the current window
-    rc_hash_ = (rc_hash_ >> 2) | (static_cast<uint64_t>(comp) << (2*(k_-1)));
-    if(filled_ < k_){
-        ++filled_;
-        if(filled_ < k_) return; // need a full window
-    }
-    // add canonical k-mer
-    add_kmer_from_window();
+    add_sequence(&c, 1);
 }
 
-void FracMinHash::add_kmer_from_window(){
-    const uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
-    if(const uint64_t s = scramble(canonical, seed_); s < threshold_){
-        // add() returns true if the item was novel (at least one bit was flipped).
-        if (sketch_.add(s)) {
-            sketch_item_count_++;
+void FracMinHash::add_sequence(const char* seq, size_t len) {
+    const uint64_t mask = (1ULL << (2 * k_)) - 1ULL;
+    const unsigned rc_shift = 2 * (k_ - 1);
+
+    for (size_t i = 0; i < len; ++i) {
+        const int code = base_to_code(seq[i]);
+        // This branch is predicted as 'false' for valid DNA sequences.
+        // The `__builtin_expect` tells the compiler to optimize for this case.
+        if (__builtin_expect(code < 0, 0)) {
+            fw_hash_ = rc_hash_ = 0; // Reset rolling hashes on invalid character.
+            filled_ = 0; // Reset k-mer fill count.
+            continue;
+        }
+        // Update forward k-mer hash with the new base.
+        fw_hash_ = ((fw_hash_ << 2) | static_cast<uint64_t>(code)) & mask;
+        // Calculate the complement of the base code.
+        const unsigned comp = 3 - static_cast<unsigned>(code);
+        // Update reverse-complement k-mer hash.
+        rc_hash_ = (rc_hash_ >> 2) | (static_cast<uint64_t>(comp) << rc_shift);
+        
+        // This branch is predicted as 'false' after the initial window is filled.
+        if (__builtin_expect(filled_ < k_, 0)) {
+            if (++filled_ < k_) continue; // Continue until one full k-mer is formed.
+        }
+        // Inlined body of add_kmer_from_window() to avoid function call overhead.
+        const uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
+        if(const uint64_t s = scramble(canonical, seed_); s < threshold_){
+            if (sketch_.add(s)) {
+                sketch_item_count_++;
+            }
         }
     }
 }

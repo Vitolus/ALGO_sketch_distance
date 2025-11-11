@@ -61,9 +61,7 @@ void createSketch(const string& output_file, const uint8_t k, const double scale
     while (std::cin.read(buffer.data(), buffer_size) || std::cin.gcount() > 0) {
         size_t bytes_read = std::cin.gcount();
         total_base_count += bytes_read;
-        for (size_t i = 0; i < bytes_read; ++i) {
-            final_sketch.add_char(buffer[i]);
-        }
+        final_sketch.add_sequence(buffer.data(), bytes_read);
     }
     // finalize and save the sketch
     try{
