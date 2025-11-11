@@ -20,11 +20,9 @@ bool BloomFilter::add(const uint64_t& item) {
         const uint64_t block_idx = h / 64;
         const uint64_t bit_mask = 1ULL << (h % 64);
         // Check if the bit is not already set
-        if ((bits_[block_idx] & bit_mask) == 0) {
-            new_bit_set = true;
-            // Non-atomic OR is sufficient for single-threaded creation.
-            // For multi-threading, this would require a lock or C++20's std::atomic_ref.
+        if (!((bits_[block_idx] >> (h % 64)) & 1ULL)) {
             bits_[block_idx] |= bit_mask;
+            new_bit_set = true;
         }
     }
     return new_bit_set;
