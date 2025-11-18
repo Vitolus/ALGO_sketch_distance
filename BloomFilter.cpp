@@ -7,9 +7,6 @@ BloomFilter::BloomFilter(uint64_t size_in_bits, uint8_t num_hashes)
     bits_.resize((size_in_bits + 63) / 64, 0);
 }
 
-// The 'hash' and 'add' methods are defined in the header file (BloomFilter.h)
-// to allow the compiler to inline them, which is a critical optimization for performance.
-
 bool BloomFilter::contains(const uint64_t& item) const {
     for (uint8_t i = 0; i < num_hashes_; ++i) {
         const uint64_t h = hash(item, i) % size_in_bits_;
