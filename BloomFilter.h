@@ -9,21 +9,26 @@ class BloomFilter {
 public:
     BloomFilter(uint64_t size_in_bits, uint8_t num_hashes);
 
-    void add(const uint64_t& item);
+    // Returns true if the item resulted in setting at least one new bit.
+    bool add(const uint64_t& item);
 
     bool contains(const uint64_t& item) const;
 
     // Bitwise OR another filter into this one
     void merge(const BloomFilter& other);
 
-    const std::vector<bool>& get_bits() const;
+    std::vector<bool> get_bits_for_saving() const;
 
     uint64_t size_in_bits() const;
 
     uint8_t num_hashes() const;
 
+    // Allow FracMinHash to access private members for loading
+    friend class FracMinHash;
+
 private:
-    std::vector<bool> bits_;
+    std::vector<uint64_t> bits_;
+    uint64_t size_in_bits_;
     uint8_t num_hashes_;
 
     // Generate the i-th hash for the item.

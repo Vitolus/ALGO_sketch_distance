@@ -48,8 +48,8 @@ void createSketch(const string& output_file, const uint8_t k, const double scale
     const uint64_t bloom_bits, const uint8_t bloom_hashes){
     // print progress messages to stderr
     cerr << "Starting sketch creation from standard input...\n";
-    cerr << "   Parameters: k=" << k << ", scale=" << scale << ", seed=" << seed << ", bf num bits=" << bloom_bits
-    << ", bf num hashes=" << bloom_hashes << endl;
+    cerr << "   Parameters: k=" << static_cast<int>(k) << ", scale=" << scale << ", seed=" << seed << endl;
+    cerr << "   Bloom filter: num bits=" << bloom_bits << ", num hashes=" << static_cast<int>(bloom_hashes) << endl;
     cerr << "   Output will be saved to: " << output_file << endl;
     FracMinHash sketch(output_file, scale, k, seed, bloom_bits, bloom_hashes);
     char current_base;
@@ -267,7 +267,7 @@ int main(int argc, char* argv[]){
         }
         // Clamp k to the valid range [1, 31] supported by FracMinHash
         k = std::max(static_cast<uint8_t>(1), std::min(static_cast<uint8_t>(31), k));
-        const auto bloom_bits = static_cast<uint64_t>(-1 * (30000 * log(0.01)) / pow(2.0,log(2)));
+        const auto bloom_bits = static_cast<uint64_t>(-1 * (30000 * log(0.01)) / (log(2) * log(2)));
         const auto bloom_hashes = static_cast<uint8_t>((bloom_bits / 30000) * log(2.0));
         const auto start_time = std::chrono::high_resolution_clock::now();
         createSketch(output_file, k, scale, seed, bloom_bits, bloom_hashes);

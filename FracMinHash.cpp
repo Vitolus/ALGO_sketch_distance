@@ -74,9 +74,8 @@ void FracMinHash::add_char(const char c){
 void FracMinHash::add_kmer_from_window(){
     const uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
     if(const uint64_t s = scramble(canonical, seed_); s < threshold_){
-        // store the scrambled hash value in the bloom filter
-        if (!sketch_.contains(s)) {
-            sketch_.add(s);
+        // add() returns true if the item was novel (at least one bit was flipped).
+        if (sketch_.add(s)) {
             sketch_item_count_++;
         }
     }
@@ -113,17 +112,16 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     const double m = static_cast<double>(sketch_.size_in_bits());
     const double k = static_cast<double>(sketch_.num_hashes());
     if (m == 0) return 1.0; // Avoid division by zero
-    const auto& bits1 = sketch_.get_bits();
-    const auto& bits2 = other.sketch_.get_bits();
+    const auto& bits1 = sketch_.bits_;
+    const auto& bits2 = other.sketch_.bits_;
     uint64_t set_bits1 = 0;
     uint64_t set_bits2 = 0;
     uint64_t union_set_bits = 0;
-    for (uint64_t i = 0; i < sketch_.size_in_bits(); ++i) {
-        const bool bit1 = bits1[i];
-        const bool bit2 = bits2[i];
-        if (bit1) set_bits1++;
-        if (bit2) set_bits2++;
-        if (bit1 || bit2) union_set_bits++;
+    for(size_t i = 0; i < bits1.size(); ++i) {
+        // Use popcount to count set bits in parallel
+        set_bits1 += __builtin_popcountll(bits1[i]);
+        set_bits2 += __builtin_popcountll(bits2[i]);
+        union_set_bits += __builtin_popcountll(bits1[i] | bits2[i]);
     }
     if (union_set_bits == 0) return 1.0; // Both empty -> identical
     // Cardinality estimation function
@@ -172,7 +170,7 @@ void FracMinHash::save(const std::string &filename) const{
     out.write(reinterpret_cast<const char*>(&bf_size_bits), sizeof(bf_size_bits));
     out.write(reinterpret_cast<const char*>(&bf_num_hashes), sizeof(bf_num_hashes));
     // Serialize the bit vector by packing bits into bytes
-    const auto& bits = sketch_.get_bits();
+    const auto bits = sketch_.get_bits_for_saving();
     const size_t num_bytes = (bits.size() + 7) / 8;
     std::vector<char> packed(num_bytes, 0);
     for(size_t i = 0; i < bits.size(); ++i) {
@@ -210,13 +208,13 @@ FracMinHash FracMinHash::load(const std::string &filename){
     if (static_cast<size_t>(in.gcount()) != num_bytes) {
         throw std::runtime_error("unexpected EOF while reading sketch bitfield");
     }
-    // Manually set the bits in the new filter
-    auto& bits = const_cast<std::vector<bool>&>(fm.sketch_.get_bits());
+    // Manually set the bits in the new filter's internal uint64_t vector
+    auto& internal_bits = fm.sketch_.bits_;
     size_t bit_count = 0;
     for(size_t i = 0; i < packed.size() && bit_count < bf_size_bits; ++i) {
         for(int j = 0; j < 8 && bit_count < bf_size_bits; ++j) {
             if ((packed[i] >> j) & 1) {
-                bits[bit_count] = true;
+                internal_bits[bit_count / 64] |= (1ULL << (bit_count % 64));
             }
             bit_count++;
         }
