@@ -163,7 +163,7 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     if (card_intersection < 0) card_intersection = 0;
     if (card_union < 1.0) return 1.0; // Avoid division by zero for very small cardinalities
     double jac = card_intersection / card_union;
-    std::cout << filename_<< "," << other.filename_ << "    Estimated Intersection: " << card_intersection << ", Estimated Union: " << card_union << ", Jaccard Estimate: " << jac 
+    std::cerr << filename_<< "," << other.filename_ << "    Estimated Intersection: " << card_intersection << ", Estimated Union: " << card_union << ", Jaccard Estimate: " << jac 
     << std::endl;
     return jac;
 }

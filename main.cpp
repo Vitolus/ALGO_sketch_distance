@@ -140,15 +140,25 @@ void printDistanceMatrix(const std::vector<std::string>& names, const std::vecto
 void unitTest(){
     // create three small sketches from hardcoded sequences
     cout << "--- Running Unit Test ---\n";
-    FracMinHash sketch1("01", 0.1, 5);
+    // Define parameters for the test sketches for clarity and consistency.
+    const double test_scale = 0.1;
+    const uint8_t test_k = 5;
+    const uint64_t test_seed = 1469598103934665603ULL;
+    const uint64_t test_bloom_bits = 48;
+    const uint8_t test_bloom_hashes = 3;
+
+    FracMinHash sketch1("seq1", test_scale, test_k, test_seed, test_bloom_bits, test_bloom_hashes);
     std::string seq1_str = "CTACTACGCCGATTCTGCTG";
-    for(char c : seq1_str) sketch1.add_char(c);
-    FracMinHash sketch2("02", 0.1, 5);
+    sketch1.add_sequence(seq1_str.c_str(), seq1_str.length());
+
+    FracMinHash sketch2("seq2", test_scale, test_k, test_seed, test_bloom_bits, test_bloom_hashes);
     std::string seq2_str = "CTACTACGCCAATTCTGCTG";
-    for(char c : seq2_str) sketch2.add_char(c);
-    FracMinHash sketch3("03", 0.1, 5);
+    sketch2.add_sequence(seq2_str.c_str(), seq2_str.length());
+
+    FracMinHash sketch3("seq3", test_scale, test_k, test_seed, test_bloom_bits, test_bloom_hashes);
     std::string seq3_str = "ATACTACGCCGATTCTGCTG";
-    for(char c : seq3_str) sketch3.add_char(c);
+    sketch3.add_sequence(seq3_str.c_str(), seq3_str.length());
+
     // compute distances
     const double dist12 = sketch1.distance(sketch2);
     const double dist13 = sketch1.distance(sketch3);
