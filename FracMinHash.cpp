@@ -23,6 +23,8 @@ FracMinHash::FracMinHash(std::string filename, const double scale, const uint8_t
         else
             threshold_ = static_cast<uint64_t>(prod);
     }
+    mask_ = (1ULL << (2 * k_)) - 1ULL;
+    rc_shift_ = 2 * (k_ - 1);
 }
 
 inline uint64_t FracMinHash::splitmix64(uint64_t x){
@@ -33,14 +35,28 @@ inline uint64_t FracMinHash::splitmix64(uint64_t x){
     return x;
 }
 
+static const int8_t base_code_table[] = {
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1, 0,-1, 1,-1,-1,-1, 2,-1,-1,-1,-1,-1,-1,-1,-1, // A=0, C=1, G=2
+    -1,-1,-1,-1, 3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // T=3
+    -1, 0,-1, 1,-1,-1,-1, 2,-1,-1,-1,-1,-1,-1,-1,-1, // a=0, c=1, g=2
+    -1,-1,-1,-1, 3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // t=3
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+};
+
 inline int FracMinHash::base_to_code(const char c){
-    switch(c){
-        case 'A': return 0;
-        case 'C': return 1;
-        case 'G': return 2;
-        case 'T': return 3;
-        default: return -1; // N or other -> invalid
-    }
+    return base_code_table[static_cast<unsigned char>(c)];
 }
 
 inline uint64_t FracMinHash::scramble(const uint64_t x, const uint64_t seed){
@@ -50,39 +66,31 @@ inline uint64_t FracMinHash::scramble(const uint64_t x, const uint64_t seed){
 
 void FracMinHash::add_char(const char c){
     const int code = base_to_code(c);
-    if(code < 0){
-        // reset rolling window on invalid base
-        fw_hash_ = rc_hash_ = 0;
+    // Invalid base handling (rare case)
+    if (__builtin_expect(code < 0, 0)) {
+        fw_hash_ = rc_hash_ = 0;  // optional: reset hashes too
         filled_ = 0;
         return;
     }
-    // update forward: shift left 2 bits, add code, keep only 2k bits
-    fw_hash_ = ((fw_hash_ << 2) | static_cast<uint64_t>(code)) & ((1ULL << (2*k_)) - 1ULL);
-    // update reverse complement: shift right 2 bits and add complement in highest positions
-    // complement: A<->T, C<->G => code_comp = 3 - code
+    // Update forward hash
+    fw_hash_ = ((fw_hash_ << 2) | static_cast<uint64_t>(code)) & mask_;
+    // Complement base code (A<->T, C<->G)
     const unsigned comp = 3 - static_cast<unsigned>(code);
-    // rc_hash_ represented in lower 2k bits as a reverse complement of the current window
-    rc_hash_ = (rc_hash_ >> 2) | (static_cast<uint64_t>(comp) << (2*(k_-1)));
-    if(filled_ < k_){
-        ++filled_;
-        if(filled_ < k_) return; // need a full window
-    }
-    // add canonical k-mer
-    add_kmer_from_window();
-}
-
-void FracMinHash::add_kmer_from_window(){
-    const uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
-    if(const uint64_t s = scramble(canonical, seed_); s < threshold_){
-        // add() returns true if the item was novel (at least one bit was flipped).
-        if (sketch_.add(s)) {
-            sketch_item_count_++;
+    // Update reverse complement hash
+    rc_hash_ = (rc_hash_ >> 2) | (static_cast<uint64_t>(comp) << rc_shift_);
+    // Increment fill count and check if we have a full k-mer
+    if (++filled_ >= k_) {
+        const uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
+        const uint64_t s = scramble(canonical, seed_);
+        if (s < threshold_) {
+            if (sketch_.add(s)) {
+                sketch_item_count_++;
+            }
         }
     }
 }
 
 size_t FracMinHash::sketch_size() const{
-    // Returns the count of items added, not the bloom filter size in bits.
     // For a more accurate cardinality estimate from a full bloom filter,
     // a formula could be used, but this direct count is better when available.
     return sketch_item_count_;
@@ -143,7 +151,7 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     if (card_intersection < 0) card_intersection = 0;
     if (card_union < 1.0) return 1.0; // Avoid division by zero for very small cardinalities
     double jac = card_intersection / card_union;
-    std::cout << filename_<< "," << other.filename_ << "    Estimated Intersection: " << card_intersection << ", Estimated Union: " << card_union << ", Jaccard Estimate: " << jac 
+    std::cerr << filename_<< "," << other.filename_ << "    Estimated Intersection: " << card_intersection << ", Estimated Union: " << card_union << ", Jaccard Estimate: " << jac 
     << std::endl;
     return jac;
 }
@@ -169,16 +177,10 @@ void FracMinHash::save(const std::string &filename) const{
     const uint8_t bf_num_hashes = sketch_.num_hashes();
     out.write(reinterpret_cast<const char*>(&bf_size_bits), sizeof(bf_size_bits));
     out.write(reinterpret_cast<const char*>(&bf_num_hashes), sizeof(bf_num_hashes));
-    // Serialize the bit vector by packing bits into bytes
-    const auto bits = sketch_.get_bits_for_saving();
-    const size_t num_bytes = (bits.size() + 7) / 8;
-    std::vector<char> packed(num_bytes, 0);
-    for(size_t i = 0; i < bits.size(); ++i) {
-        if (bits[i]) {
-            packed[i / 8] |= (1 << (i % 8));
-        }
-    }
-    out.write(packed.data(), packed.size());
+    // Serialize the internal bit vector of the Bloom filter directly.
+    // This is more efficient than converting to a vector of bools.
+    const auto& bits = sketch_.bits_;
+    out.write(reinterpret_cast<const char*>(bits.data()), bits.size() * sizeof(uint64_t));
     out.close();
 }
 
@@ -201,23 +203,12 @@ FracMinHash FracMinHash::load(const std::string &filename){
     in.read(reinterpret_cast<char*>(&bf_size_bits), sizeof(bf_size_bits));
     in.read(reinterpret_cast<char*>(&bf_num_hashes), sizeof(bf_num_hashes));
     FracMinHash fm(filename, scale, k, seed, bf_size_bits, bf_num_hashes);
-    // Deserialize the bit vector
-    const size_t num_bytes = (bf_size_bits + 7) / 8;
-    std::vector<char> packed(num_bytes);
-    in.read(packed.data(), num_bytes);
-    if (static_cast<size_t>(in.gcount()) != num_bytes) {
-        throw std::runtime_error("unexpected EOF while reading sketch bitfield");
-    }
-    // Manually set the bits in the new filter's internal uint64_t vector
+    // Deserialize the bit vector directly into the Bloom filter's internal storage.
     auto& internal_bits = fm.sketch_.bits_;
-    size_t bit_count = 0;
-    for(size_t i = 0; i < packed.size() && bit_count < bf_size_bits; ++i) {
-        for(int j = 0; j < 8 && bit_count < bf_size_bits; ++j) {
-            if ((packed[i] >> j) & 1) {
-                internal_bits[bit_count / 64] |= (1ULL << (bit_count % 64));
-            }
-            bit_count++;
-        }
+    const size_t num_bytes_to_read = internal_bits.size() * sizeof(uint64_t);
+    in.read(reinterpret_cast<char*>(internal_bits.data()), num_bytes_to_read);
+    if (static_cast<size_t>(in.gcount()) != num_bytes_to_read) {
+        throw std::runtime_error("unexpected EOF while reading sketch bitfield");
     }
     // Note: sketch_item_count_ is not stored, so it will be 0 on load.
     // This is a limitation; for accurate cardinality, it would need to be stored

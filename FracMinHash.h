@@ -8,20 +8,25 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include "BloomFilter.h" // Include the new BloomFilter header
+#include "BloomFilter.h"
 
 class FracMinHash{
 public:
     // scale in (0,1]; k must be <= 31
-    // bloom_size_bits: size of the bloom filter in bits. 800k bits = 100KB.
+    // bloom_size_bits: size of the bloom filter in bits. 400k bits = 50KB.
     // bloom_num_hashes: number of hash functions for the bloom filter.
     FracMinHash(std::string filename, double scale, uint8_t k, uint64_t seed = 1469598103934665603ULL,
-        uint64_t bloom_size_bits = 400000, uint8_t bloom_num_hashes = 5);
+        uint64_t bloom_size_bits = 400000, uint8_t bloom_num_hashes = 10);
 
     /**
      * @brief add one base (ACGT); other characters reset the rolling window
      */
     void add_char(char c);
+
+    /**
+     * @brief add a sequence of bases from a buffer
+     */
+    void add_sequence(const char* seq, size_t len);
 
     /**
      * @brief number of items added to the sketch
@@ -61,6 +66,10 @@ private:
     uint64_t rc_hash_;   // reverse complement encoding
     unsigned filled_;    // number of consecutive valid bases in a window
 
+    // Cached constants
+    uint64_t mask_;
+    unsigned rc_shift_;
+
     // Bloom filter for storing the sample of scrambled hashes
     BloomFilter sketch_;
     // Keep a separate count of items added, as the bloom filter doesn't store this.
@@ -84,8 +93,6 @@ private:
      * randomized mapping across different runs/sketches.
      */
     static inline uint64_t scramble(uint64_t x, uint64_t seed);
-
-    void add_kmer_from_window();
 };
 
 #endif //ALGO_SKETCH_DISTANCE_FRACMINHASH_H
