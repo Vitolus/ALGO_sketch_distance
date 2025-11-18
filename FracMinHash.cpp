@@ -72,8 +72,8 @@ void FracMinHash::add_sequence(const char* seq, size_t len) {
 
     for (size_t i = 0; i < len; ++i) {
         const int code = base_to_code(seq[i]);
-        // This branch is predicted as 'false' for valid DNA sequences.
-        // The `__builtin_expect` tells the compiler to optimize for this case.
+        // this branch is predicted as 'false' for valid DNA sequences
+        // "__builtin_expect" tells the compiler to optimize for this case
         if (__builtin_expect(code < 0, 0)) {
             filled_ = 0; // reset k-mer fill count
             continue;
@@ -90,7 +90,6 @@ void FracMinHash::add_sequence(const char* seq, size_t len) {
             const uint64_t s = scramble(canonical, seed_);
             if(s < threshold_){
                 // The k-mer passes the filter. Add it to the sketch and increment the counter.
-                // The BloomFilter::add function is optimized to be void and does not return a value.
                 sketch_.add(s);
                 sketch_item_count_++;
             }
@@ -99,7 +98,6 @@ void FracMinHash::add_sequence(const char* seq, size_t len) {
 }
 
 size_t FracMinHash::sketch_size() const{
-    // Returns the count of items added, not the bloom filter size in bits.
     // For a more accurate cardinality estimate from a full bloom filter,
     // a formula could be used, but this direct count is better when available.
     return sketch_item_count_;
