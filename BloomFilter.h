@@ -9,9 +9,10 @@ class BloomFilter {
 public:
     BloomFilter(uint64_t size_in_bits, uint8_t num_hashes);
 
-    // Returns true if the item resulted in setting at least one new bit.
+    // Adds an item to the filter by setting the corresponding bits.
+    // This function is branchless and unconditionally sets bits for maximum performance.
     // Inlined for performance: reduces function call overhead when called in a tight loop.
-    inline bool add(const uint64_t& item);
+    inline void add(const uint64_t& item);
 
     bool contains(const uint64_t& item) const;
 
@@ -45,25 +46,20 @@ inline uint64_t BloomFilter::hash(const uint64_t& item, uint8_t i) {
 }
 
 // Inlined add function definition. Must be in the header.
-inline bool BloomFilter::add(const uint64_t& item) {
-    // Branchless implementation to avoid performance degradation on dense filters.
-    // It unconditionally sets bits, which is faster than checking first due to branch misprediction penalties.
-    bool new_bit_set = false; // This flag is no longer perfectly accurate but is retained for API compatibility.
-                              // The performance gain from removing the branch is more critical.
+inline void BloomFilter::add(const uint64_t& item) {
+    // This branchless implementation unconditionally sets bits, which is faster than checking
+    // before setting due to avoiding branch misprediction penalties, especially on dense filters.
     #pragma GCC unroll 8
     for (uint8_t i = 0; i < num_hashes_; ++i) {
         const uint64_t h = hash(item, i) % size_in_bits_;
         const uint64_t block_idx = h / 64;
         const uint64_t bit_mask = 1ULL << (h % 64);
-        // Unconditionally set the bit. This is faster than checking if it's already set
-        // because it avoids a conditional branch that is frequently mispredicted on dense filters.
+        // Unconditionally set the bit.
         bits_[block_idx] |= bit_mask;
     }
-    // Note: With the branch removed, we can't cheaply know if a new bit was set.
-    // We will always return true to indicate the item was processed. The `sketch_item_count_`
-    // will now represent the number of k-mers that passed the scale filter, not the number of unique additions.
-    // This is an acceptable trade-off for the massive performance gain.
-    return true;
+    // This function is void because cheaply and accurately determining if a new bit was set
+    // adds significant overhead. The calling code is designed to handle this by treating
+    // the sketch item count as an over-estimation, which is an acceptable trade-off for the performance gain.
 }
 
 #endif //ALGO_SKETCH_DISTANCE_BLOOMFILTER_H

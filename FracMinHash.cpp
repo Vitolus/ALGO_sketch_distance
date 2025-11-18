@@ -75,8 +75,7 @@ void FracMinHash::add_sequence(const char* seq, size_t len) {
         // This branch is predicted as 'false' for valid DNA sequences.
         // The `__builtin_expect` tells the compiler to optimize for this case.
         if (__builtin_expect(code < 0, 0)) {
-            fw_hash_ = rc_hash_ = 0; // Reset rolling hashes on invalid character.
-            filled_ = 0; // Reset k-mer fill count.
+            filled_ = 0; // reset k-mer fill count
             continue;
         }
         // Update forward k-mer hash with the new base.
@@ -86,14 +85,13 @@ void FracMinHash::add_sequence(const char* seq, size_t len) {
         // Update reverse-complement k-mer hash.
         rc_hash_ = (rc_hash_ >> 2) | (static_cast<uint64_t>(comp) << rc_shift);
         
-        // This branch is predicted as 'false' after the initial window is filled.
-        if (__builtin_expect(filled_ < k_, 0)) {
-            if (++filled_ < k_) continue; // Continue until one full k-mer is formed.
-        }
-        // Inlined body of add_kmer_from_window() to avoid function call overhead.
-        const uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
-        if(const uint64_t s = scramble(canonical, seed_); s < threshold_){
-            if (sketch_.add(s)) {
+        if (++filled_ >= k_) {
+            const uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
+            const uint64_t s = scramble(canonical, seed_);
+            if(s < threshold_){
+                // The k-mer passes the filter. Add it to the sketch and increment the counter.
+                // The BloomFilter::add function is optimized to be void and does not return a value.
+                sketch_.add(s);
                 sketch_item_count_++;
             }
         }
@@ -191,16 +189,10 @@ void FracMinHash::save(const std::string &filename) const{
     const uint8_t bf_num_hashes = sketch_.num_hashes();
     out.write(reinterpret_cast<const char*>(&bf_size_bits), sizeof(bf_size_bits));
     out.write(reinterpret_cast<const char*>(&bf_num_hashes), sizeof(bf_num_hashes));
-    // Serialize the bit vector by packing bits into bytes
-    const auto bits = sketch_.get_bits_for_saving();
-    const size_t num_bytes = (bits.size() + 7) / 8;
-    std::vector<char> packed(num_bytes, 0);
-    for(size_t i = 0; i < bits.size(); ++i) {
-        if (bits[i]) {
-            packed[i / 8] |= (1 << (i % 8));
-        }
-    }
-    out.write(packed.data(), packed.size());
+    // Serialize the internal bit vector of the Bloom filter directly.
+    // This is more efficient than converting to a vector of bools.
+    const auto& bits = sketch_.bits_;
+    out.write(reinterpret_cast<const char*>(bits.data()), bits.size() * sizeof(uint64_t));
     out.close();
 }
 
@@ -223,23 +215,12 @@ FracMinHash FracMinHash::load(const std::string &filename){
     in.read(reinterpret_cast<char*>(&bf_size_bits), sizeof(bf_size_bits));
     in.read(reinterpret_cast<char*>(&bf_num_hashes), sizeof(bf_num_hashes));
     FracMinHash fm(filename, scale, k, seed, bf_size_bits, bf_num_hashes);
-    // Deserialize the bit vector
-    const size_t num_bytes = (bf_size_bits + 7) / 8;
-    std::vector<char> packed(num_bytes);
-    in.read(packed.data(), num_bytes);
-    if (static_cast<size_t>(in.gcount()) != num_bytes) {
-        throw std::runtime_error("unexpected EOF while reading sketch bitfield");
-    }
-    // Manually set the bits in the new filter's internal uint64_t vector
+    // Deserialize the bit vector directly into the Bloom filter's internal storage.
     auto& internal_bits = fm.sketch_.bits_;
-    size_t bit_count = 0;
-    for(size_t i = 0; i < packed.size() && bit_count < bf_size_bits; ++i) {
-        for(int j = 0; j < 8 && bit_count < bf_size_bits; ++j) {
-            if ((packed[i] >> j) & 1) {
-                internal_bits[bit_count / 64] |= (1ULL << (bit_count % 64));
-            }
-            bit_count++;
-        }
+    const size_t num_bytes_to_read = internal_bits.size() * sizeof(uint64_t);
+    in.read(reinterpret_cast<char*>(internal_bits.data()), num_bytes_to_read);
+    if (static_cast<size_t>(in.gcount()) != num_bytes_to_read) {
+        throw std::runtime_error("unexpected EOF while reading sketch bitfield");
     }
     // Note: sketch_item_count_ is not stored, so it will be 0 on load.
     // This is a limitation; for accurate cardinality, it would need to be stored
