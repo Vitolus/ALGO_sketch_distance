@@ -8,7 +8,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include "BloomFilter.h" // Include the new BloomFilter header
+#include "BloomFilter.h"
 
 class FracMinHash{
 public:
