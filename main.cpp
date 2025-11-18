@@ -266,7 +266,7 @@ int main(int argc, char* argv[]){
             k = static_cast<uint8_t>(std::round(std::log(p_chance) / std::log(1.0 - d_max)));
             cerr << "Using automatically determined k=" << k << " from d_max=" << d_max << endl;
         } else { // Neither was provided, use default k
-            k = 21;
+            k = 13;
         }
         // Clamp k to the valid range [1, 31] supported by FracMinHash
         k = std::max(static_cast<uint8_t>(1), std::min(static_cast<uint8_t>(31), k));
