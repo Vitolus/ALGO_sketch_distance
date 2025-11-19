@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <complex>
 #include <chrono>
+#include <deque>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
@@ -18,16 +19,16 @@ using std::vector;
 
 void printUsage(const std::string& program_name) {
     std::cerr << "Usage: \n"
-              << "  " << program_name << " --create-sketch [options] <output.sketch>\n"
-              << "  " << program_name << " --distance <G1.sketch> <G2.sketch> ...\n\n"
-              << "Commands:\n"
-              << "  --create-sketch  Creates a sketch from a genome sequence provided via stdin.\n"
-              << "  --distance       Calculates and prints the distance matrix, UPGMA tree, and NJ tree.\n\n"
-              << "Options for --create-sketch:\n"
-              << "  --k <int>        K-mer size. Overrides --d-max if both are provided. (default: 21)\n"
-              << "  --d-max <float>  Max evolutionary distance. Used to calculate k if --k is not set.\n"
-              << "  --scale <float>  Scaling factor (default: 0.001)\n"
-              << "  --seed <int>     Seed for hashing (default: 1469598103934665603)\n";
+    << "  " << program_name << " --create-sketch [options] <output.sketch>\n"
+    << "  " << program_name << " --distance <G1.sketch> <G2.sketch> ...\n\n"
+    << "Commands:\n"
+    << "  --create-sketch  Creates a sketch from a genome sequence provided via stdin.\n"
+    << "  --distance       Calculates and prints the distance matrix, UPGMA tree, and NJ tree.\n\n"
+    << "Options for --create-sketch:\n"
+    << "  --k <int>        K-mer size. Overrides --d-max if both are provided. (default: 13)\n"
+    << "  --d-max <float>  Max evolutionary distance. Used to calculate k if --k is not set.\n"
+    << "  --scale <float>  Scaling factor (default: 0.001)\n"
+    << "  --seed <int>     Seed for hashing (default: 1469598103934665603)\n";
 }
 
 /**
@@ -137,15 +138,27 @@ void printDistanceMatrix(const std::vector<std::string>& names, const std::vecto
 void unitTest(){
     // create three small sketches from hardcoded sequences
     cout << "--- Running Unit Test ---\n";
-    FracMinHash sketch1("01", 0.1, 5);
+    // Define parameters for the test sketches for clarity and consistency.
+    const double test_scale = 0.1;
+    const uint8_t test_k = 5;
+    const uint64_t test_seed = 1469598103934665603ULL;
+    const uint64_t test_bloom_bits = 48;
+    const uint8_t test_bloom_hashes = 3;
+    FracMinHash sketch1("seq1", test_scale, test_k, test_seed, test_bloom_bits, test_bloom_hashes);
     std::string seq1_str = "CTACTACGCCGATTCTGCTG";
-    for(char c : seq1_str) sketch1.add_char(c);
-    FracMinHash sketch2("02", 0.1, 5);
+    for (char c : seq1_str) {
+        sketch1.add_char(c);
+    }
+    FracMinHash sketch2("seq2", test_scale, test_k, test_seed, test_bloom_bits, test_bloom_hashes);
     std::string seq2_str = "CTACTACGCCAATTCTGCTG";
-    for(char c : seq2_str) sketch2.add_char(c);
-    FracMinHash sketch3("03", 0.1, 5);
+    for (char c : seq2_str) {
+        sketch2.add_char(c);
+    }
+    FracMinHash sketch3("seq3", test_scale, test_k, test_seed, test_bloom_bits, test_bloom_hashes);
     std::string seq3_str = "ATACTACGCCGATTCTGCTG";
-    for(char c : seq3_str) sketch3.add_char(c);
+    for (char c : seq3_str) {
+        sketch3.add_char(c);
+    }
     // compute distances
     const double dist12 = sketch1.distance(sketch2);
     const double dist13 = sketch1.distance(sketch3);
@@ -263,7 +276,7 @@ int main(int argc, char* argv[]){
             k = static_cast<uint8_t>(std::round(std::log(p_chance) / std::log(1.0 - d_max)));
             cerr << "Using automatically determined k=" << k << " from d_max=" << d_max << endl;
         } else { // Neither was provided, use default k
-            k = 21;
+            k = 13;
         }
         // Clamp k to the valid range [1, 31] supported by FracMinHash
         k = std::max(static_cast<uint8_t>(1), std::min(static_cast<uint8_t>(31), k));
@@ -296,6 +309,7 @@ int main(int argc, char* argv[]){
         buildUPGMATree(names, matrix);
         cout << "\n--- Neighbor-Joining Tree (Newick Format) ---\n";
         buildNJTree(names, matrix);
+
     }else if(command == "--test"){
         unitTest();
     }else{
