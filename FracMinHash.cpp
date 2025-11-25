@@ -23,6 +23,8 @@ FracMinHash::FracMinHash(std::string filename, const double scale, const uint8_t
         else
             threshold_ = static_cast<uint64_t>(prod);
     }
+    mask_ = (1ULL << (2 * k_)) - 1ULL;
+    rc_shift_ = 2 * (k_ - 1);
 }
 
 inline uint64_t FracMinHash::splitmix64(uint64_t x){
@@ -63,37 +65,34 @@ inline uint64_t FracMinHash::scramble(const uint64_t x, const uint64_t seed){
 }
 
 void FracMinHash::add_char(const char c){
-    add_sequence(&c, 1);
-}
-
-void FracMinHash::add_sequence(const char* seq, size_t len) {
-    const uint64_t mask = (1ULL << (2 * k_)) - 1ULL;
-    const unsigned rc_shift = 2 * (k_ - 1);
-
-    for (size_t i = 0; i < len; ++i) {
-        const int code = base_to_code(seq[i]);
-        // this branch is predicted as 'false' for valid DNA sequences
-        // "__builtin_expect" tells the compiler to optimize for this case
-        if (__builtin_expect(code < 0, 0)) {
-            filled_ = 0; // reset k-mer fill count
-            continue;
-        }
-        // Update forward k-mer hash with the new base.
-        fw_hash_ = ((fw_hash_ << 2) | static_cast<uint64_t>(code)) & mask;
-        // Calculate the complement of the base code.
-        const unsigned comp = 3 - static_cast<unsigned>(code);
-        // Update reverse-complement k-mer hash.
-        rc_hash_ = (rc_hash_ >> 2) | (static_cast<uint64_t>(comp) << rc_shift);
-        
-        if (++filled_ >= k_) {
-            const uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
-            const uint64_t s = scramble(canonical, seed_);
-            if(s < threshold_){
-                // The k-mer passes the filter. Add it to the sketch and increment the counter.
-                sketch_.add(s);
+    const int code = base_to_code(c);
+    // Invalid base handling (rare case)
+    if (__builtin_expect(code < 0, 0)) {
+        fw_hash_ = rc_hash_ = 0;  // optional: reset hashes too
+        filled_ = 0;
+        return;
+    }
+    // Update forward hash
+    fw_hash_ = ((fw_hash_ << 2) | static_cast<uint64_t>(code)) & mask_;
+    // Complement base code (A<->T, C<->G)
+    const unsigned comp = 3 - static_cast<unsigned>(code);
+    // Update reverse complement hash
+    rc_hash_ = (rc_hash_ >> 2) | (static_cast<uint64_t>(comp) << rc_shift_);
+    // Increment fill count and check if we have a full k-mer
+    if (++filled_ >= k_) {
+        const uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
+        const uint64_t s = scramble(canonical, seed_);
+        if (s < threshold_) {
+            if (sketch_.add(s)) {
                 sketch_item_count_++;
             }
         }
+    }
+}
+
+void FracMinHash::add_sequence(const char* seq, const size_t len){
+    for(size_t i = 0; i < len; i++){
+        add_char(seq[i]);
     }
 }
 
@@ -127,14 +126,11 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     const double m = static_cast<double>(sketch_.size_in_bits());
     const double k = static_cast<double>(sketch_.num_hashes());
     if (m == 0) return 1.0; // Avoid division by zero
-
-    // Directly use the optimized bit vectors
     const auto& bits1 = sketch_.bits_;
     const auto& bits2 = other.sketch_.bits_;
     uint64_t set_bits1 = 0;
     uint64_t set_bits2 = 0;
     uint64_t union_set_bits = 0;
-
     for(size_t i = 0; i < bits1.size(); ++i) {
         // Use popcount to count set bits in parallel
         set_bits1 += __builtin_popcountll(bits1[i]);

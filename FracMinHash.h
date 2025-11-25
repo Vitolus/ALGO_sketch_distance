@@ -66,6 +66,10 @@ private:
     uint64_t rc_hash_;   // reverse complement encoding
     unsigned filled_;    // number of consecutive valid bases in a window
 
+    // Cached constants
+    uint64_t mask_;
+    unsigned rc_shift_;
+
     // Bloom filter for storing the sample of scrambled hashes
     BloomFilter sketch_;
     // Keep a separate count of items added, as the bloom filter doesn't store this.
@@ -89,9 +93,6 @@ private:
      * randomized mapping across different runs/sketches.
      */
     static inline uint64_t scramble(uint64_t x, uint64_t seed);
-
-    // This function is no longer needed as its body is directly inlined into add_sequence
-    // inline void add_kmer_from_window();
 };
 
 #endif //ALGO_SKETCH_DISTANCE_FRACMINHASH_H

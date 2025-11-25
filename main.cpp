@@ -52,16 +52,17 @@ void createSketch(const string& output_file, const uint8_t k, const double scale
     cerr << "   Parameters: k=" << static_cast<int>(k) << ", scale=" << scale << ", seed=" << seed << endl;
     cerr << "   Bloom filter: num bits=" << bloom_bits << ", num hashes=" << static_cast<int>(bloom_hashes) << endl;
     cerr << "   Output will be saved to: " << output_file << endl;
-    FracMinHash final_sketch(output_file, scale, k, seed, bloom_bits, bloom_hashes);
-    unsigned long long total_base_count = 0;
-    // Use a simple, efficient single-threaded streaming approach.
-    // A buffer is used to make reading from stdin more efficient than char-by-char.
-    const size_t buffer_size = 4 * 1024 * 1024; // 4MB buffer
-    std::vector<char> buffer(buffer_size);
-    while (std::cin.read(buffer.data(), buffer_size) || std::cin.gcount() > 0) {
-        size_t bytes_read = std::cin.gcount();
-        total_base_count += bytes_read;
-        final_sketch.add_sequence(buffer.data(), bytes_read);
+    FracMinHash sketch(output_file, scale, k, seed, bloom_bits, bloom_hashes);
+    // Use a buffer for efficient I/O
+    constexpr size_t BUFFER_SIZE = 65536; // 64KB buffer
+    std::vector<char> buffer(BUFFER_SIZE);
+    unsigned long long base_count = 0;
+    // reading a buffer of characters at a time from stdin
+    while(std::cin.read(buffer.data(), buffer.size()) || std::cin.gcount() > 0){
+        const size_t bytes_read = std::cin.gcount();
+        // upstream commands already filter for ACTG
+        sketch.add_sequence(buffer.data(), bytes_read);
+        base_count += bytes_read;
     }
     // finalize and save the sketch
     try{
@@ -146,19 +147,21 @@ void unitTest(){
     const uint64_t test_seed = 1469598103934665603ULL;
     const uint64_t test_bloom_bits = 48;
     const uint8_t test_bloom_hashes = 3;
-
     FracMinHash sketch1("seq1", test_scale, test_k, test_seed, test_bloom_bits, test_bloom_hashes);
     std::string seq1_str = "CTACTACGCCGATTCTGCTG";
-    sketch1.add_sequence(seq1_str.c_str(), seq1_str.length());
-
+    for (char c : seq1_str) {
+        sketch1.add_char(c);
+    }
     FracMinHash sketch2("seq2", test_scale, test_k, test_seed, test_bloom_bits, test_bloom_hashes);
     std::string seq2_str = "CTACTACGCCAATTCTGCTG";
-    sketch2.add_sequence(seq2_str.c_str(), seq2_str.length());
-
+    for (char c : seq2_str) {
+        sketch2.add_char(c);
+    }
     FracMinHash sketch3("seq3", test_scale, test_k, test_seed, test_bloom_bits, test_bloom_hashes);
     std::string seq3_str = "ATACTACGCCGATTCTGCTG";
-    sketch3.add_sequence(seq3_str.c_str(), seq3_str.length());
-
+    for (char c : seq3_str) {
+        sketch3.add_char(c);
+    }
     // compute distances
     const double dist12 = sketch1.distance(sketch2);
     const double dist13 = sketch1.distance(sketch3);
@@ -309,6 +312,7 @@ int main(int argc, char* argv[]){
         buildUPGMATree(names, matrix);
         cout << "\n--- Neighbor-Joining Tree (Newick Format) ---\n";
         buildNJTree(names, matrix);
+
     }else if(command == "--test"){
         unitTest();
     }else{
