@@ -53,13 +53,16 @@ void createSketch(const string& output_file, const uint8_t k, const double scale
     cerr << "   Bloom filter: num bits=" << bloom_bits << ", num hashes=" << static_cast<int>(bloom_hashes) << endl;
     cerr << "   Output will be saved to: " << output_file << endl;
     FracMinHash sketch(output_file, scale, k, seed, bloom_bits, bloom_hashes);
-    char current_base;
+    // Use a buffer for efficient I/O
+    constexpr size_t BUFFER_SIZE = 65536; // 64KB buffer
+    std::vector<char> buffer(BUFFER_SIZE);
     unsigned long long base_count = 0;
-    // reading one character at a time from stdin
-    while(std::cin.get(current_base)){
+    // reading a buffer of characters at a time from stdin
+    while(std::cin.read(buffer.data(), buffer.size()) || std::cin.gcount() > 0){
+        const size_t bytes_read = std::cin.gcount();
         // upstream commands already filter for ACTG
-        sketch.add_char(current_base);
-        base_count++;
+        sketch.add_sequence(buffer.data(), bytes_read);
+        base_count += bytes_read;
     }
     // finalize and save the sketch
     try{

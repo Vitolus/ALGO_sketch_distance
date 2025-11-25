@@ -90,6 +90,12 @@ void FracMinHash::add_char(const char c){
     }
 }
 
+void FracMinHash::add_sequence(const char* seq, const size_t len){
+    for(size_t i = 0; i < len; i++){
+        add_char(seq[i]);
+    }
+}
+
 size_t FracMinHash::sketch_size() const{
     // For a more accurate cardinality estimate from a full bloom filter,
     // a formula could be used, but this direct count is better when available.
