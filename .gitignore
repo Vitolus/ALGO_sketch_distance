@@ -1,6 +1,7 @@
 **/*Zone.Identifier
 .vscode/
 build/
+FlameGraph/
 
 ### C++ template
 # Prerequisites

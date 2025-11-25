@@ -66,13 +66,13 @@ void createSketch(const string& output_file, const uint8_t k, const double scale
     }
     // finalize and save the sketch
     try{
-        sketch.save(output_file);
+        final_sketch.save(output_file);
     }catch(const std::exception& e){
         cerr << "Error saving sketch: " << e.what() << endl;
         return;
     }
-    cerr << "   Processed " << base_count << " bases\n";
-    cerr << "   Retained " << sketch.sketch_size() << " hashes in the sketch\n";
+    cerr << "   Processed " << total_base_count << " bases\n";
+    cerr << "   Retained " << final_sketch.sketch_size() << " hashes in the sketch (Note: this count is an over-estimation)\n";
     cerr << "   Sketch saved successfully to " << output_file << endl;
     cout << "Memory usage: " << (std::filesystem::file_size(output_file) / 1024) << " kilobytes\n";
 }

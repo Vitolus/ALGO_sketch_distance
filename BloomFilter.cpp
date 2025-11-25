@@ -1,4 +1,5 @@
 #include "BloomFilter.h"
+#include <atomic>
 
 BloomFilter::BloomFilter(uint64_t size_in_bits, uint8_t num_hashes)
     : size_in_bits_(size_in_bits), num_hashes_(num_hashes) {
@@ -36,7 +37,7 @@ std::vector<bool> BloomFilter::get_bits_for_saving() const {
 }
 
 uint64_t BloomFilter::size_in_bits() const {
-    return bits_.size();
+    return size_in_bits_;
 }
 
 uint8_t BloomFilter::num_hashes() const {

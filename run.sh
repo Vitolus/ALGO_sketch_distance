@@ -5,14 +5,12 @@
 
 # Exit immediately if a command exits with a non-zero status.
 set -e
-
 echo "--- Building the project... ---"
 # Assuming g++ is available. The -O3 flag enables optimizations.
 g++ -std=c++17 -O3 main.cpp FracMinHash.h FracMinHash.cpp phylogenerator.h BloomFilter.cpp BloomFilter.h -o dist
 echo "Build complete. Executable 'dist' created."
 echo ""
 echo ""
-
 echo "--- Creating genome sketches... ---"
 K=13
 SCALE=0.001
@@ -35,9 +33,7 @@ echo ""
 echo "--- All sketches created successfully. ---"
 echo ""
 echo ""
-
 echo "--- Computing distance matrix and generating phylogenetic trees... ---"
 ./dist --distance hs.sketch mm.sketch la.sketch dm.sketch sc.sketch
 echo ""
-
 echo "--- Analysis complete. ---"
