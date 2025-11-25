@@ -17,7 +17,7 @@ using std::endl;
 using std::string;
 using std::vector;
 
-void printUsage(const std::string& program_name) {
+void printUsage(const std::string& program_name){
     std::cerr << "Usage: \n"
     << "  " << program_name << " --create-sketch [options] <output.sketch>\n"
     << "  " << program_name << " --distance <G1.sketch> <G2.sketch> ...\n\n"
@@ -66,13 +66,13 @@ void createSketch(const string& output_file, const uint8_t k, const double scale
     }
     // finalize and save the sketch
     try{
-        final_sketch.save(output_file);
+        sketch.save(output_file);
     }catch(const std::exception& e){
         cerr << "Error saving sketch: " << e.what() << endl;
         return;
     }
-    cerr << "   Processed " << total_base_count << " bases\n";
-    cerr << "   Retained " << final_sketch.sketch_size() << " hashes in the sketch (Note: this count is an over-estimation)\n";
+    cerr << "   Processed " << base_count << " bases\n";
+    cerr << "   Retained " << sketch.sketch_size() << " hashes in the sketch (Note: this count is an over-estimation)\n";
     cerr << "   Sketch saved successfully to " << output_file << endl;
     cout << "Memory usage: " << (std::filesystem::file_size(output_file) / 1024) << " kilobytes\n";
 }
@@ -129,9 +129,9 @@ std::pair<std::vector<std::string>, std::vector<std::vector<double>>> computeDis
 void printDistanceMatrix(const std::vector<std::string>& names, const std::vector<std::vector<double>>& matrix) {
     std::cout << std::fixed << std::setprecision(6);
     std::cout << names.size() << "\n";
-    for (size_t i = 0; i < names.size(); ++i) {
+    for(size_t i = 0; i < names.size(); ++i){
         std::cout << names[i];
-        for (size_t j = 0; j < names.size(); ++j) {
+        for(size_t j = 0; j < names.size(); ++j){
             std::cout << " " << matrix[i][j];
         }
         std::cout << "\n";

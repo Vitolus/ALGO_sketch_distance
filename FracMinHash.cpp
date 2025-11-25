@@ -17,8 +17,8 @@ FracMinHash::FracMinHash(std::string filename, const double scale, const uint8_t
     }else{
         // scale in (0,1). ld = floor(scale * 2^64)
         const long double prod = std::floor(std::ldexp(static_cast<long double>(scale_), 64));
-        if (prod < 1.0L) threshold_ = 1;
-        else if (prod > static_cast<long double>(std::numeric_limits<uint64_t>::max()))
+        if(prod < 1.0L) threshold_ = 1;
+        else if(prod > static_cast<long double>(std::numeric_limits<uint64_t>::max()))
             threshold_ = std::numeric_limits<uint64_t>::max();
         else
             threshold_ = static_cast<uint64_t>(prod);
@@ -67,7 +67,7 @@ inline uint64_t FracMinHash::scramble(const uint64_t x, const uint64_t seed){
 void FracMinHash::add_char(const char c){
     const int code = base_to_code(c);
     // Invalid base handling (rare case)
-    if (__builtin_expect(code < 0, 0)) {
+    if(__builtin_expect(code < 0, 0)){
         fw_hash_ = rc_hash_ = 0;  // optional: reset hashes too
         filled_ = 0;
         return;
@@ -79,7 +79,7 @@ void FracMinHash::add_char(const char c){
     // Update reverse complement hash
     rc_hash_ = (rc_hash_ >> 2) | (static_cast<uint64_t>(comp) << rc_shift_);
     // Increment fill count and check if we have a full k-mer
-    if (++filled_ >= k_) {
+    if(++filled_ >= k_){
         const uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
         const uint64_t s = scramble(canonical, seed_);
         if (s < threshold_) {
@@ -148,14 +148,14 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     double card2 = estimate_cardinality(set_bits2);
     double card_union = estimate_cardinality(union_set_bits);
     // If any estimate is unreliable (filter is saturated), fall back to the simpler bit-based Jaccard.
-    if (card1 < 0 || card2 < 0 || card_union < 0) {
+    if(card1 < 0 || card2 < 0 || card_union < 0){
         uint64_t intersection_bits = set_bits1 + set_bits2 - union_set_bits;
         return static_cast<double>(intersection_bits) / static_cast<double>(union_set_bits);
     }
     // Estimate intersection size using the inclusion-exclusion principle
     double card_intersection = card1 + card2 - card_union;
-    if (card_intersection < 0) card_intersection = 0;
-    if (card_union < 1.0) return 1.0; // Avoid division by zero for very small cardinalities
+    if(card_intersection < 0) card_intersection = 0;
+    if(card_union < 1.0) return 1.0; // Avoid division by zero for very small cardinalities
     double jac = card_intersection / card_union;
     std::cerr << filename_<< "," << other.filename_ << "    Estimated Intersection: " << card_intersection << ", Estimated Union: " << card_union << ", Jaccard Estimate: " << jac 
     << std::endl;
@@ -213,7 +213,7 @@ FracMinHash FracMinHash::load(const std::string &filename){
     auto& internal_bits = fm.sketch_.bits_;
     const size_t num_bytes_to_read = internal_bits.size() * sizeof(uint64_t);
     in.read(reinterpret_cast<char*>(internal_bits.data()), num_bytes_to_read);
-    if (static_cast<size_t>(in.gcount()) != num_bytes_to_read) {
+    if(static_cast<size_t>(in.gcount()) != num_bytes_to_read){
         throw std::runtime_error("unexpected EOF while reading sketch bitfield");
     }
     // Note: sketch_item_count_ is not stored, so it will be 0 on load.

@@ -28,7 +28,6 @@ struct Node{
     int id = 0; // unique identifier for the node
     int cluster_size = 1; // for UPGMA: number of leaves in this cluster
     static inline int next_id = 0; // ensure each node gets a unique ID
-
     explicit Node(std::string n = "") : name(std::move(n)), id(next_id++){}
     [[nodiscard]] bool is_leaf() const{
         return left == nullptr && right == nullptr;
@@ -40,17 +39,14 @@ struct Node{
  */
 inline void printTreeRecursive(const Node* node, const std::string& prefix, bool is_left){
     if(!node) return;
-
     cout << prefix;
     cout << (is_left ? "├──" : "└──" );
-
     // print the value of the node
-    if (node->is_leaf()) {
+    if(node->is_leaf()){
         cout << node->name << " [" << node->branch_length << "]\n";
-    } else {
+    }else{
         cout << "Node " << node->id << " [" << node->branch_length << "]\n";
     }
-
     // enter the next level of the tree
     // the right child is printed first to get a more natural tree layout in the console
     printTreeRecursive(node->right.get(), prefix + (is_left ? "│   " : "    "), false);
@@ -63,9 +59,9 @@ inline void printTreeRecursive(const Node* node, const std::string& prefix, bool
 inline void printTree(const Node* root){
     if(!root) return;
     cout << "\n--- Tree Visualization ---" << endl;
-    if (root->is_leaf()) {
+    if(root->is_leaf()){
         cout << root->name << endl;
-    } else {
+    }else{
         cout << "Root" << endl;
     }
     printTreeRecursive(root->right.get(), "", false);
@@ -111,7 +107,7 @@ inline void buildUPGMATree(const std::vector<std::string>& names, const std::vec
         clusters.push_back(std::make_unique<Node>(name));
     }
     auto current_matrix = matrix;
-    while (clusters.size() > 1) {
+    while(clusters.size() > 1){
         // find the pair of clusters (i, j) with the minimum distance
         double min_dist = std::numeric_limits<double>::max();
         int min_i = -1;
