@@ -1,5 +1,4 @@
 #include "BloomFilter.h"
-#include <atomic>
 
 BloomFilter::BloomFilter(uint64_t size_in_bits, uint8_t num_hashes)
     : size_in_bits_(size_in_bits), num_hashes_(num_hashes){
@@ -24,16 +23,6 @@ void BloomFilter::merge(const BloomFilter& other){
     for(size_t i = 0; i < bits_.size(); ++i){
         bits_[i] |= other.bits_[i];
     }
-}
-
-std::vector<bool> BloomFilter::get_bits_for_saving() const{
-    std::vector<bool> bool_bits(size_in_bits_);
-    for(uint64_t i = 0; i < size_in_bits_; ++i){
-        if((bits_[i / 64] >> (i % 64)) & 1ULL){
-            bool_bits[i] = true;
-        }
-    }
-    return bool_bits;
 }
 
 uint64_t BloomFilter::size_in_bits() const{

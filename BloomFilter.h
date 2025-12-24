@@ -1,9 +1,9 @@
 #ifndef ALGO_SKETCH_DISTANCE_BLOOMFILTER_H
 #define ALGO_SKETCH_DISTANCE_BLOOMFILTER_H
 
-#include <vector>
 #include <cstdint>
 #include <functional>
+#include <vector>
 
 class BloomFilter {
 public:
@@ -15,18 +15,16 @@ public:
      */
     inline bool add(const uint64_t& item);
 
-    bool contains(const uint64_t& item) const;
+    [[nodiscard]] bool contains(const uint64_t& item) const;
 
     /**
      * @brief merges another BloomFilter into this one by performing a bitwise OR on their bit vectors
      */
     void merge(const BloomFilter& other);
 
-    std::vector<bool> get_bits_for_saving() const;
+    [[nodiscard]] uint64_t size_in_bits() const;
 
-    uint64_t size_in_bits() const;
-
-    uint8_t num_hashes() const;
+    [[nodiscard]] uint8_t num_hashes() const;
 
     // Allow FracMinHash to access private members for loading
     friend class FracMinHash;

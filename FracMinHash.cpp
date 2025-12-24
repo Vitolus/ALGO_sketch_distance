@@ -1,7 +1,5 @@
 #include "FracMinHash.h"
 #include <iostream>
-#include <utility>
-#include <vector>
 
 FracMinHash::FracMinHash(std::string filename, const double scale, const uint8_t k, const uint64_t seed,
     const uint64_t bloom_size_bits, const uint8_t bloom_num_hashes)
@@ -123,8 +121,8 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     if(sketch_.size_in_bits() != other.sketch_.size_in_bits() || sketch_.num_hashes() != other.sketch_.num_hashes()) {
         throw std::invalid_argument("Bloom filter parameters must match for Jaccard estimation");
     }
-    const double m = static_cast<double>(sketch_.size_in_bits());
-    const double k = static_cast<double>(sketch_.num_hashes());
+    const auto m = static_cast<double>(sketch_.size_in_bits());
+    const auto k = static_cast<double>(sketch_.num_hashes());
     if (m == 0) return 1.0; // Avoid division by zero
     const auto& bits1 = sketch_.bits_;
     const auto& bits2 = other.sketch_.bits_;
@@ -139,25 +137,26 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     }
     if (union_set_bits == 0) return 1.0; // Both empty -> identical
     // Cardinality estimation function
-    auto estimate_cardinality = [m, k](uint64_t set_bits) -> double {
+    auto estimate_cardinality = [m, k](const uint64_t set_bits) -> double {
         if (set_bits == 0) return 0.0;
         if (set_bits >= m) return -1.0; // Saturated, estimate is unreliable
         return -m / k * std::log(1.0 - static_cast<double>(set_bits) / m);
     };
-    double card1 = estimate_cardinality(set_bits1);
-    double card2 = estimate_cardinality(set_bits2);
-    double card_union = estimate_cardinality(union_set_bits);
+    const double card1 = estimate_cardinality(set_bits1);
+    const double card2 = estimate_cardinality(set_bits2);
+    const double card_union = estimate_cardinality(union_set_bits);
     // If any estimate is unreliable (filter is saturated), fall back to the simpler bit-based Jaccard.
     if(card1 < 0 || card2 < 0 || card_union < 0){
-        uint64_t intersection_bits = set_bits1 + set_bits2 - union_set_bits;
+        const uint64_t intersection_bits = set_bits1 + set_bits2 - union_set_bits;
         return static_cast<double>(intersection_bits) / static_cast<double>(union_set_bits);
     }
     // Estimate intersection size using the inclusion-exclusion principle
     double card_intersection = card1 + card2 - card_union;
     if(card_intersection < 0) card_intersection = 0;
     if(card_union < 1.0) return 1.0; // Avoid division by zero for very small cardinalities
-    double jac = card_intersection / card_union;
-    std::cerr << filename_<< "," << other.filename_ << "    Estimated Intersection: " << card_intersection << ", Estimated Union: " << card_union << ", Jaccard Estimate: " << jac 
+    const double jac = card_intersection / card_union;
+    std::cerr << filename_<< "," << other.filename_ << "    Estimated Intersection: " << card_intersection
+    << ", Estimated Union: " << card_union << ", Jaccard Estimate: " << jac
     << std::endl;
     return jac;
 }

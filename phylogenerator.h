@@ -12,8 +12,8 @@ using std::vector;
 using std::string;
 using std::cout;
 using std::endl;
-using std::make_shared;
 using std::unique_ptr;
+using std::move;
 
 /**
  * @brief a simple struct to represent a node in the phylogenetic tree
@@ -21,14 +21,14 @@ using std::unique_ptr;
 struct Node{
     // using unique_ptr for automatic memory management of the tree. When a Node is destroyed, it automatically
     // destroys its children
-    std::unique_ptr<Node> left = nullptr;
-    std::unique_ptr<Node> right = nullptr;
-    std::string name; // name of the sequence (for leaves)
+    unique_ptr<Node> left = nullptr;
+    unique_ptr<Node> right = nullptr;
+    string name; // name of the sequence (for leaves)
     double branch_length = 0.0; // distance to parent
     int id = 0; // unique identifier for the node
     int cluster_size = 1; // for UPGMA: number of leaves in this cluster
     static inline int next_id = 0; // ensure each node gets a unique ID
-    explicit Node(std::string n = "") : name(std::move(n)), id(next_id++){}
+    explicit Node(string n = "") : name(std::move(n)), id(next_id++){}
     [[nodiscard]] bool is_leaf() const{
         return left == nullptr && right == nullptr;
     }
@@ -37,7 +37,7 @@ struct Node{
 /**
  * @brief a helper function to print the tree structure to the console
  */
-inline void printTreeRecursive(const Node* node, const std::string& prefix, bool is_left){
+inline void printTreeRecursive(const Node* node, const string& prefix, bool is_left){
     if(!node) return;
     cout << prefix;
     cout << (is_left ? "├──" : "└──" );
@@ -72,7 +72,7 @@ inline void printTree(const Node* root){
 /**
  * @brief convert a tree to Newick format
  */
-inline void toNewickRecursive(const Node* node, std::string& newick_string){
+inline void toNewickRecursive(const Node* node, string& newick_string){
     if(!node) return;
     if(node->is_leaf()){
         newick_string += node->name + ":" + std::to_string(node->branch_length);
@@ -88,8 +88,8 @@ inline void toNewickRecursive(const Node* node, std::string& newick_string){
         }
     }
 }
-inline std::string toNewick(const Node* root){
-    std::string newick_string;
+inline string toNewick(const Node* root){
+    string newick_string;
     toNewickRecursive(root, newick_string);
     newick_string += ";";
     return newick_string;
@@ -98,10 +98,10 @@ inline std::string toNewick(const Node* root){
 /**
  * @brief perform UPGMA clustering
  */
-inline void buildUPGMATree(const std::vector<std::string>& names, const std::vector<std::vector<double>>& matrix){
+inline void buildUPGMATree(const vector<string>& names, const vector<vector<double>>& matrix){
     if(names.empty()) return;
     // initialize active clusters: one for each leaf node
-    std::vector<std::unique_ptr<Node>> clusters;
+    vector<unique_ptr<Node>> clusters;
     clusters.reserve(names.size());
     for(const auto& name : names){
         clusters.push_back(std::make_unique<Node>(name));
@@ -127,11 +127,11 @@ inline void buildUPGMATree(const std::vector<std::string>& names, const std::vec
         clusters[min_i]->branch_length = min_dist / 2.0;
         clusters[min_j]->branch_length = min_dist / 2.0;
         // transfer ownership of the child nodes to the new parent node
-        new_node->left = std::move(clusters[min_i]);
-        new_node->right = std::move(clusters[min_j]);
+        new_node->left = move(clusters[min_i]);
+        new_node->right = move(clusters[min_j]);
         new_node->cluster_size = new_node->left->cluster_size + new_node->right->cluster_size;
         // update the distance matrix
-        std::vector<double> new_distances;
+        vector<double> new_distances;
         for(size_t k = 0; k < clusters.size(); k++){
             if(k == min_i || k == min_j) continue;
             // weighted average distance for the new cluster
@@ -141,8 +141,8 @@ inline void buildUPGMATree(const std::vector<std::string>& names, const std::vec
             new_distances.push_back(dist);
         }
         // create the next smaller matrix
-        std::vector<std::vector<double>> next_matrix(current_matrix.size() - 1,
-            std::vector<double>(current_matrix.size() - 1));
+        vector<vector<double>> next_matrix(current_matrix.size() - 1,
+            vector<double>(current_matrix.size() - 1));
         int r_new = 1;
         int c_new = 1;
         for(size_t r = 0; r < current_matrix.size(); r++){
@@ -160,7 +160,7 @@ inline void buildUPGMATree(const std::vector<std::string>& names, const std::vec
         }
         current_matrix = next_matrix;
         // update the list of active clusters. Replace the first merged cluster with the new node
-        clusters[min_i] = std::move(new_node);
+        clusters[min_i] = move(new_node);
         // remove the second merged cluster
         clusters.erase(clusters.begin() + min_j);
     }
@@ -171,20 +171,20 @@ inline void buildUPGMATree(const std::vector<std::string>& names, const std::vec
 /**
  * @brief perform Neighbor-Joining
  */
-inline void buildNJTree(const std::vector<std::string>& names, const std::vector<std::vector<double>>& matrix){
+inline void buildNJTree(const vector<string>& names, const vector<vector<double>>& matrix){
     if(names.empty()) return;
-    std::vector<std::unique_ptr<Node>> clusters;
+    vector<unique_ptr<Node>> clusters;
     clusters.reserve(names.size());
     for(const auto& name : names){
         clusters.push_back(std::make_unique<Node>(name));
     }
     auto current_matrix = matrix;
-    std::vector<int> active_indices(names.size());
+    vector<int> active_indices(names.size());
     std::iota(active_indices.begin(), active_indices.end(), 0); // Fills with 0, 1, 2, ...
     while(clusters.size() > 2){
         const auto n = static_cast<int>(clusters.size());
         // calculate the 'u' values (net divergence) for each cluster
-        std::vector<double> u(n, 0.0);
+        vector<double> u(n, 0.0);
         for(int i = 0; i < n; i++){
             for(int j = 0; j < n; j++){
                 if(i != j) u[i] += current_matrix[i][j];
@@ -209,16 +209,16 @@ inline void buildNJTree(const std::vector<std::string>& names, const std::vector
         // 4. Calculate branch lengths from the new node to i and j
         clusters[min_i]->branch_length = (dist_ij / 2.0) + (u[min_i] - u[min_j]) / (2.0 * (n - 2));
         clusters[min_j]->branch_length = dist_ij - clusters[min_i]->branch_length;
-        new_node->left = std::move(clusters[min_i]);
-        new_node->right = std::move(clusters[min_j]);
+        new_node->left = move(clusters[min_i]);
+        new_node->right = move(clusters[min_j]);
         // update the distance matrix
-        std::vector<double> new_distances;
+        vector<double> new_distances;
         for(int k = 0; k < n; k++){
             if(k == min_i || k == min_j) continue;
             double dist = (current_matrix[min_i][k] + current_matrix[min_j][k] - dist_ij) / 2.0;
             new_distances.push_back(dist);
         }
-        std::vector next_matrix(n - 1, std::vector<double>(n - 1));
+        vector next_matrix(n - 1, vector<double>(n - 1));
         int r_new = 1;
         for(int r = 0; r < n; r++){
             if(r == min_i || r == min_j) continue;
@@ -235,15 +235,15 @@ inline void buildNJTree(const std::vector<std::string>& names, const std::vector
         }
         current_matrix = next_matrix;
         // update cluster list
-        clusters[min_i] = std::move(new_node);
+        clusters[min_i] = move(new_node);
         clusters.erase(clusters.begin() + min_j);
     }
     // join the last two clusters
     if(clusters.size() == 2){
         clusters[0]->branch_length = clusters[1]->branch_length = current_matrix[0][1] / 2.0;
-        auto root = std::make_unique<Node>();
-        root->left = std::move(clusters[0]);
-        root->right = std::move(clusters[1]);
+        const auto root = std::make_unique<Node>();
+        root->left = move(clusters[0]);
+        root->right = move(clusters[1]);
         cout << toNewick(root.get()) << endl;
         printTree(root.get());
         return; // Exit after processing the final tree
