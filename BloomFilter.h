@@ -42,9 +42,15 @@ private:
 };
 
 inline uint64_t BloomFilter::hash(const uint64_t& item, uint8_t i){
-    // Use different seeds for different hash functions
-    // This is a simple way to get multiple hashes from one item
-    return std::hash<uint64_t>{}(item ^ (i * 0x9e3779b97f4a7c15ULL));
+    // Use a portable deterministic mixer
+    // MurmurHash3 64-bit finalizer
+    uint64_t k = item ^ (i * 0x9e3779b97f4a7c15ULL);
+    k ^= k >> 33;
+    k *= 0xff51afd7ed558ccdULL;
+    k ^= k >> 33;
+    k *= 0xc4ceb9fe1a85ec53ULL;
+    k ^= k >> 33;
+    return k;
 }
 
 inline bool BloomFilter::add(const uint64_t& item){

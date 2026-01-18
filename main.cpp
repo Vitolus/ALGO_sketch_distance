@@ -28,7 +28,8 @@ void printUsage(const std::string& program_name){
     << "  --k <int>        K-mer size. Overrides --d-max if both are provided. (default: 13)\n"
     << "  --d-max <float>  Max evolutionary distance. Used to calculate k if --k is not set.\n"
     << "  --scale <float>  Scaling factor (default: 0.001)\n"
-    << "  --seed <int>     Seed for hashing (default: 1469598103934665603)\n";
+    << "  --seed <int>     Seed for hashing (default: 1469598103934665603)\n"
+    << "  --genome-size <int> Expected number of bases in the genome. Used to size the Bloom filter. (default: 30000000)\n";
 }
 
 /**
@@ -203,6 +204,7 @@ int main(int argc, char* argv[]){
         double d_max = 0.0;
         double scale = 0.001;
         uint64_t seed = 1469598103934665603ULL;
+        uint64_t genome_size = 30000000; // Default to 30M bases -> 30k hashes at 0.001 scale
         string output_file;
         for(int i = 2; i < argc; i++){
             if(string arg = argv[i]; arg == "--k"){
@@ -249,6 +251,17 @@ int main(int argc, char* argv[]){
                 }catch(const std::exception& e){
                     cerr << "Error: --seed argument must be an integer: " << e.what() << endl;
                 }
+            }else if(arg == "--genome-size"){
+                if(i + 1 >= argc){
+                    cerr << "Error: --genome-size requires an integer argument.\n";
+                    printUsage(argv[0]);
+                    return 1;
+                }
+                try{
+                    genome_size = std::stoull(argv[++i]);
+                }catch(const std::exception& e){
+                    cerr << "Error: --genome-size argument must be an integer: " << e.what() << endl;
+                }
             }else{
                 // assume it's the output file name
                 if(!output_file.empty()){
@@ -283,8 +296,22 @@ int main(int argc, char* argv[]){
         }
         // Clamp k to the valid range [1, 31] supported by FracMinHash
         k = std::max(static_cast<uint8_t>(1), std::min(static_cast<uint8_t>(31), k));
-        const auto bloom_bits = static_cast<uint64_t>(-1 * (30000 * log(0.01)) / (log(2) * log(2)));
-        const auto bloom_hashes = static_cast<uint8_t>((bloom_bits / 30000) * log(2.0));
+
+        // Calculate expected number of elements
+        uint64_t expected_elements = static_cast<uint64_t>(std::ceil(genome_size * scale));
+        if(expected_elements < 1000) expected_elements = 1000; // minimal sanity check
+
+        // Calculate optimal Bloom filter size (m) and number of hashes (k_bf)
+        // Formula: m = - (n * ln(p)) / (ln(2)^2)
+        //          k = (m / n) * ln(2)
+        // We target a false positive probability p = 0.01 (1%)
+        const double p = 0.01;
+        const double ln2 = std::log(2.0);
+        const double ln_p = std::log(p);
+
+        const auto bloom_bits = static_cast<uint64_t>(std::ceil(-1.0 * (expected_elements * ln_p) / (ln2 * ln2)));
+        const auto bloom_hashes = static_cast<uint8_t>(std::round((static_cast<double>(bloom_bits) / expected_elements) * ln2));
+
         const auto start_time = std::chrono::high_resolution_clock::now();
         createSketch(output_file, k, scale, seed, bloom_bits, bloom_hashes);
         const auto end_time = std::chrono::high_resolution_clock::now();

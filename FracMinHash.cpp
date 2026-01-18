@@ -119,6 +119,10 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     if(scale_ != other.scale_) throw std::invalid_argument("scale mismatch in jaccard");
     if(seed_ != other.seed_) throw std::invalid_argument("seed mismatch in jaccard");
     if(sketch_.size_in_bits() != other.sketch_.size_in_bits() || sketch_.num_hashes() != other.sketch_.num_hashes()) {
+        std::cerr << "Error: Bloom filter mismatch.\n"
+                  << "This sketch: " << sketch_.size_in_bits() << " bits, " << (int)sketch_.num_hashes() << " hashes.\n"
+                  << "Other sketch: " << other.sketch_.size_in_bits() << " bits, " << (int)other.sketch_.num_hashes() << " hashes.\n"
+                  << "Ensure all sketches were created with the same --genome-size parameter.\n";
         throw std::invalid_argument("Bloom filter parameters must match for Jaccard estimation");
     }
     const auto m = static_cast<double>(sketch_.size_in_bits());
