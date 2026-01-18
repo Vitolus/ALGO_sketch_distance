@@ -150,17 +150,17 @@ void unitTest(){
     const uint8_t test_bloom_hashes = 3;
     FracMinHash sketch1("seq1", test_scale, test_k, test_seed, test_bloom_bits, test_bloom_hashes);
     std::string seq1_str = "CTACTACGCCGATTCTGCTG";
-    for (char c : seq1_str) {
+    for(char c : seq1_str){
         sketch1.add_char(c);
     }
     FracMinHash sketch2("seq2", test_scale, test_k, test_seed, test_bloom_bits, test_bloom_hashes);
     std::string seq2_str = "CTACTACGCCAATTCTGCTG";
-    for (char c : seq2_str) {
+    for(char c : seq2_str){
         sketch2.add_char(c);
     }
     FracMinHash sketch3("seq3", test_scale, test_k, test_seed, test_bloom_bits, test_bloom_hashes);
     std::string seq3_str = "ATACTACGCCGATTCTGCTG";
-    for (char c : seq3_str) {
+    for(char c : seq3_str){
         sketch3.add_char(c);
     }
     // compute distances
@@ -278,11 +278,11 @@ int main(int argc, char* argv[]){
             return 1;
         }
         // Determine final k value based on user input
-        if (k > 0) { // --k was provided, it takes precedence
-            if (d_max > 0.0) {
+        if(k > 0){ // --k was provided, it takes precedence
+            if(d_max > 0.0){
                 cerr << "Warning: Both --k and --d-max were provided. Using --k " << k << ".\n";
             }
-        } else if (d_max > 0.0) { // --d-max was provided, but --k was not
+        }else if(d_max > 0.0){ // --d-max was provided, but --k was not
             if (d_max <= 0.0 || d_max >= 1.0) {
                 cerr << "Error: --d-max must be between 0.0 and 1.0 (exclusive).\n";
                 return 1;
@@ -291,7 +291,7 @@ int main(int argc, char* argv[]){
             const double p_chance = 0.01;
             k = static_cast<uint8_t>(std::round(std::log(p_chance) / std::log(1.0 - d_max)));
             cerr << "Using automatically determined k=" << k << " from d_max=" << d_max << endl;
-        } else { // Neither was provided, use default k
+        }else{ // Neither was provided, use default k
             k = 13;
         }
         // Clamp k to the valid range [1, 31] supported by FracMinHash

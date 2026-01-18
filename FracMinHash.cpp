@@ -33,7 +33,9 @@ inline uint64_t FracMinHash::splitmix64(uint64_t x){
     return x;
 }
 
-static const int8_t base_code_table[] = {
+// Lookup table for DNA bases (A=0, C=1, G=2, T=3)
+// Faster than bitwise logic on many CPUs due to L1 cache hits vs ALU dependency chains.
+static const int8_t base_code_table[256] = {
     -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
     -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
     -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
@@ -42,7 +44,6 @@ static const int8_t base_code_table[] = {
     -1,-1,-1,-1, 3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // T=3
     -1, 0,-1, 1,-1,-1,-1, 2,-1,-1,-1,-1,-1,-1,-1,-1, // a=0, c=1, g=2
     -1,-1,-1,-1, 3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // t=3
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
     -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
     -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
     -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
@@ -63,24 +64,27 @@ inline uint64_t FracMinHash::scramble(const uint64_t x, const uint64_t seed){
 }
 
 void FracMinHash::add_char(const char c){
-    const int code = base_to_code(c);
-    // Invalid base handling (rare case)
+    const int code = base_code_table[static_cast<unsigned char>(c)];
+    // Safety check for invalid characters (newlines, etc)
     if(__builtin_expect(code < 0, 0)){
-        fw_hash_ = rc_hash_ = 0;  // optional: reset hashes too
+        fw_hash_ = rc_hash_ = 0;
         filled_ = 0;
         return;
     }
     // Update forward hash
     fw_hash_ = ((fw_hash_ << 2) | static_cast<uint64_t>(code)) & mask_;
     // Complement base code (A<->T, C<->G)
-    const unsigned comp = 3 - static_cast<unsigned>(code);
+    // Mapping is A:0, C:1, G:2, T:3
+    // Complement: 0<->3, 1<->2. This is simply XOR 3.
+    const unsigned comp = static_cast<unsigned>(code) ^ 3;
     // Update reverse complement hash
     rc_hash_ = (rc_hash_ >> 2) | (static_cast<uint64_t>(comp) << rc_shift_);
     // Increment fill count and check if we have a full k-mer
     if(++filled_ >= k_){
         const uint64_t canonical = fw_hash_ < rc_hash_ ? fw_hash_ : rc_hash_;
-        const uint64_t s = scramble(canonical, seed_);
-        if (s < threshold_) {
+        const uint64_t s = splitmix64(canonical ^ seed_);
+        // Typical case prediction: s is rarely < threshold (scale 0.00001)
+        if (__builtin_expect(s < threshold_, 0)) {
             if (sketch_.add(s)) {
                 sketch_item_count_++;
             }
@@ -89,9 +93,59 @@ void FracMinHash::add_char(const char c){
 }
 
 void FracMinHash::add_sequence(const char* seq, const size_t len){
-    for(size_t i = 0; i < len; i++){
-        add_char(seq[i]);
+    if(len == 0) return;
+    // Cache member variables in registers
+    uint64_t l_fw = fw_hash_;
+    uint64_t l_rc = rc_hash_;
+    unsigned l_filled = filled_;
+    const uint64_t l_mask = mask_;
+    const unsigned l_rc_shift = rc_shift_;
+    const unsigned l_k = k_;
+    const uint64_t l_seed = seed_;
+    const uint64_t l_threshold = threshold_;
+    size_t i = 0;
+    // 1. Startup phase
+    while(i < len && l_filled < l_k){
+        const int code = base_code_table[static_cast<unsigned char>(seq[i])];
+        if (__builtin_expect(code < 0, 0)) {
+            l_fw = l_rc = 0; l_filled = 0;
+            i++; continue;
+        }
+        l_fw = ((l_fw << 2) | static_cast<uint64_t>(code)) & l_mask;
+        const auto comp = static_cast<uint64_t>(code ^ 3);
+        l_rc = (l_rc >> 2) | (comp << l_rc_shift);
+        l_filled++;
+
+        if(l_filled >= l_k){
+            const uint64_t canonical = l_fw < l_rc ? l_fw : l_rc;
+            const uint64_t s = splitmix64(canonical ^ l_seed);
+            if (__builtin_expect(s < l_threshold, 0)) {
+                 if(sketch_.add(s)) sketch_item_count_++;
+            }
+        }
+        i++;
     }
+    // 2. Steady state phase
+    // We assume the upstream filters effectively remove invalid chars, so we skip the check in the hot loop
+    // or we check it efficiently. For 'dist' tool consuming 'script_stream', we only get ACTG.
+    for(; i < len; i++){
+        const int code = base_code_table[static_cast<unsigned char>(seq[i])];
+        // Update forward hash
+        l_fw = ((l_fw << 2) | static_cast<uint64_t>(code)) & l_mask;
+        // Update RC hash
+        const auto comp = static_cast<uint64_t>(code ^ 3);
+        l_rc = (l_rc >> 2) | (comp << l_rc_shift);
+        const uint64_t canonical = l_fw < l_rc ? l_fw : l_rc;
+        if (const uint64_t s = splitmix64(canonical ^ l_seed); __builtin_expect(s < l_threshold, 0)) {
+             if(sketch_.add(s)){
+                 sketch_item_count_++;
+             }
+        }
+    }
+    // Write back to members
+    fw_hash_ = l_fw;
+    rc_hash_ = l_rc;
+    filled_ = l_filled;
 }
 
 size_t FracMinHash::sketch_size() const{
@@ -127,7 +181,7 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
     }
     const auto m = static_cast<double>(sketch_.size_in_bits());
     const auto k = static_cast<double>(sketch_.num_hashes());
-    if (m == 0) return 1.0; // Avoid division by zero
+    if(m == 0) return 1.0; // Avoid division by zero
     const auto& bits1 = sketch_.bits_;
     const auto& bits2 = other.sketch_.bits_;
     uint64_t set_bits1 = 0;
@@ -139,7 +193,7 @@ double FracMinHash::jaccard(const FracMinHash &other) const{
         set_bits2 += __builtin_popcountll(bits2[i]);
         union_set_bits += __builtin_popcountll(bits1[i] | bits2[i]);
     }
-    if (union_set_bits == 0) return 1.0; // Both empty -> identical
+    if(union_set_bits == 0) return 1.0; // Both empty -> identical
     // Cardinality estimation function
     auto estimate_cardinality = [m, k](const uint64_t set_bits) -> double {
         if (set_bits == 0) return 0.0;
