@@ -298,7 +298,7 @@ int main(int argc, char* argv[]){
         k = std::max(static_cast<uint8_t>(1), std::min(static_cast<uint8_t>(31), k));
 
         // Calculate expected number of elements
-        uint64_t expected_elements = static_cast<uint64_t>(std::ceil(genome_size * scale));
+        auto expected_elements = static_cast<uint64_t>(std::ceil(genome_size * scale));
         if(expected_elements < 1000) expected_elements = 1000; // minimal sanity check
 
         // Calculate optimal Bloom filter size (m) and number of hashes (k_bf)
