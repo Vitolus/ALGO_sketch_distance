@@ -12,29 +12,20 @@ echo "Build complete. Executable 'dist' created."
 echo ""
 echo ""
 echo "--- Creating genome sketches... ---"
-K=13
-SCALE=0.00001 # Reduced scale to keep sketch size < 50KB
-# Genome sizes for Bloom filter dimensioning
-SIZE_HS=3200000000 # Homo sapiens ~3.2Gb (Largest)
-
-# To compare Bloom Filters, they must have the same size and hash functions.
-# We size all filters based on the largest genome in the set to avoid saturation.
-COMMON_GENOME_SIZE=$SIZE_HS
-
 echo "Creating sketch for Homo sapiens..."
-./script_stream.sh -s homo_sapiens | ./dist --create-sketch --k $K --scale $SCALE --genome-size $COMMON_GENOME_SIZE hs.sketch
+./script_stream.sh -s homo_sapiens | ./dist --create-sketch hs.sketch
 echo ""
 echo "Creating sketch for Saccharomyces cerevisiae..."
-./script_stream.sh -s saccharomyces_cerevisiae | ./dist --create-sketch --k $K --scale $SCALE --genome-size $COMMON_GENOME_SIZE sc.sketch
+./script_stream.sh -s saccharomyces_cerevisiae | ./dist --create-sketch sc.sketch
 echo ""
 echo "Creating sketch for Mus musculus..."
-./script_stream.sh -s mus_musculus | ./dist --create-sketch --k $K --scale $SCALE --genome-size $COMMON_GENOME_SIZE mm.sketch
+./script_stream.sh -s mus_musculus | ./dist --create-sketch mm.sketch
 echo ""
 echo "Creating sketch for Loxodonta africana..."
-./script_stream.sh -s loxodonta_africana | ./dist --create-sketch --k $K --scale $SCALE --genome-size $COMMON_GENOME_SIZE la.sketch
+./script_stream.sh -s loxodonta_africana | ./dist --create-sketch la.sketch
 echo ""
 echo "Creating sketch for Drosophila melanogaster..."
-./script_stream.sh -s drosophila_melanogaster | ./dist --create-sketch --k $K --scale $SCALE --genome-size $COMMON_GENOME_SIZE dm.sketch
+./script_stream.sh -s drosophila_melanogaster | ./dist --create-sketch dm.sketch
 echo ""
 echo "--- All sketches created successfully. ---"
 echo ""

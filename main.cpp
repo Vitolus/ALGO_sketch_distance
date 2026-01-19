@@ -27,9 +27,9 @@ void printUsage(const std::string& program_name){
     << "Options for --create-sketch:\n"
     << "  --k <int>        K-mer size. Overrides --d-max if both are provided. (default: 13)\n"
     << "  --d-max <float>  Max evolutionary distance. Used to calculate k if --k is not set.\n"
-    << "  --scale <float>  Scaling factor (default: 0.001)\n"
+    << "  --scale <float>  Scaling factor (default: 0.0001)\n"
     << "  --seed <int>     Seed for hashing (default: 1469598103934665603)\n"
-    << "  --genome-size <int> Expected number of bases in the genome. Used to size the Bloom filter. (default: 30000000)\n";
+    << "  --genome-size <int> Expected number of bases in the genome. Used to size the Bloom filter. (default: 3200000000)\n";
 }
 
 /**
@@ -200,11 +200,11 @@ int main(int argc, char* argv[]){
             printUsage(argv[0]);
             return 1;
         }
-        uint8_t k = 0;
+        uint8_t k = 13;
         double d_max = 0.0;
-        double scale = 0.001;
+        double scale = 0.0001;
         uint64_t seed = 1469598103934665603ULL;
-        uint64_t genome_size = 30000000; // Default to 30M bases -> 30k hashes at 0.001 scale
+        uint64_t genome_size = 3200000000; // Default to human genome size
         string output_file;
         for(int i = 2; i < argc; i++){
             if(string arg = argv[i]; arg == "--k"){
