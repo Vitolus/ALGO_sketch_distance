@@ -202,7 +202,7 @@ int main(int argc, char* argv[]){
         }
         uint8_t k = 13;
         double d_max = 0.0;
-        double scale = 0.0001;
+        double scale = 0.00001;
         uint64_t seed = 1469598103934665603ULL;
         uint64_t genome_size = 3200000000; // Default to human genome size
         string output_file;
